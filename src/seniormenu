@@ -8,7 +8,7 @@ ydotool_is_used=0
 while [ $# -gt 0 ]; do
 	case $1 in
 		--menu)
-			dmenu="$2"
+			menu="$2"
 			shift
 			shift
 			;;
