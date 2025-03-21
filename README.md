@@ -121,7 +121,7 @@ $ senior -s friends show example.com
 $ senior show friends/example.com
 ```
 equivalent.
-senior recognises that `main/friends/example.com` is actually at `friends/example.com` and therefore uses
+seniorpw recognises that `main/friends/example.com` is actually at `friends/example.com` and therefore uses
 `friends/.identity.age` to decrypt.
 The same goes for `senior edit` and using `friends/.recipients/*` to encrypt.
 This is very practical for [seniormenu](#seniormenu), as it only looks inside the default store.
@@ -151,7 +151,7 @@ bindsym $mod+t exec seniormenu --menu bemenu --type user password
 If you have set a passphrase to protect your identity file, then running
 `age -d -i .identity.age example.com.age`
 would require you to enter the passphrase each time.
-Because this is very cumbersome, senior provides an agent.
+Because this is very cumbersome, seniorpw provides an agent.
 
 Upon receiving your passphrase once,
 `senior` starts `senior-agent` to cache your identity.
