@@ -8,7 +8,7 @@ use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, ErrorKind, Read, Write};
-use std::iter::Enumerate;
+use std::iter::{self, Enumerate};
 use std::path::{Path, PathBuf};
 use std::process::{self, ChildStdout, Command, ExitStatus, Stdio};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -16,7 +16,7 @@ use std::{env, str::FromStr};
 
 use seniorpw::{get_socket_name, geteuid};
 
-use age::secrecy::{ExposeSecret, Secret};
+use age::secrecy::{ExposeSecret, SecretString};
 use age::{self, ssh};
 use atty::Stream;
 use clap::Parser;
@@ -277,6 +277,22 @@ fn ask_passphrase_twice() -> std::io::Result<String> {
     }
 }
 
+fn age_identity_from_keyfile_content(
+    keyfile_content: &str,
+) -> Result<age::x25519::Identity, Box<dyn Error>> {
+    let identity_str = keyfile_content
+        .lines()
+        .find(|&l| l.starts_with("AGE-SECRET-KEY"))
+        .ok_or("No identity in keyfile content!")?;
+    Ok(age::x25519::Identity::from_str(identity_str)?)
+}
+
+fn new_passphrase_identity(passphrase: &str) -> age::scrypt::Identity {
+    let mut identity = age::scrypt::Identity::new(SecretString::from(passphrase));
+    identity.set_max_work_factor(32);
+    identity
+}
+
 // returns the public key
 fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String, Box<dyn Error>> {
     match identity {
@@ -295,7 +311,8 @@ fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String,
             let mut file_writer = File::create(&identity_file)?;
             let mut file_writer_for_encryptor = File::create(&identity_file)?;
             let mut encryptor_writer = if use_passphrase {
-                let encryptor = age::Encryptor::with_user_passphrase(Secret::new(passphrase));
+                let encryptor =
+                    age::Encryptor::with_user_passphrase(SecretString::from(passphrase));
                 Some(encryptor.wrap_output(&mut file_writer_for_encryptor)?)
             } else {
                 None
@@ -317,135 +334,112 @@ fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String,
             Ok(pubkey)
         }
         Some(keyfile) => {
-            match age::IdentityFile::from_file(keyfile.clone()) {
-                Ok(identity_file) => {
+            if let Ok(keyfile_content) = std::fs::read_to_string(keyfile) {
+                if let Ok(age_identity) = age_identity_from_keyfile_content(&keyfile_content) {
                     // unencrypted age identity file
-                    match identity_file
-                        .into_identities()
-                        .first()
-                        .ok_or("No identities in file.")?
-                    {
-                        age::IdentityFileEntry::Native(i) => {
-                            println!("The supplied age identity is unencrypted. It is recommended to encrypt it with a passphrase.");
-                            let passphrase = ask_passphrase_twice()?;
-                            let use_passphrase = !passphrase.is_empty();
-                            let identity_file = store_dir.join(if use_passphrase {
-                                ".identity.age"
-                            } else {
-                                ".identity.txt"
-                            });
+                    println!("The supplied age identity is unencrypted. It is recommended to encrypt it with a passphrase.");
+                    let passphrase = ask_passphrase_twice()?;
+                    let use_passphrase = !passphrase.is_empty();
+                    let identity_file = store_dir.join(if use_passphrase {
+                        ".identity.age"
+                    } else {
+                        ".identity.txt"
+                    });
+                    fs::create_dir_all(store_dir)?;
+                    if use_passphrase {
+                        let encryptor =
+                            age::Encryptor::with_user_passphrase(SecretString::from(passphrase));
+                        let mut write_to = encryptor.wrap_output(File::create(&identity_file)?)?;
+                        write_to.write_all(keyfile_content.as_bytes())?;
+                        write_to.finish()?;
+                    } else {
+                        fs::copy(keyfile, identity_file)?;
+                    }
+                    return Ok(age_identity.to_public().to_string());
+                }
+            }
+            // three possibilities left:
+            // 1. encrypted ssh key
+            // 2. unencrypted ssh key
+            // 3. encrypted age file
+            let mut keyfile_bufread = BufReader::new(File::open(keyfile)?);
+            match ssh::Identity::from_buffer(&mut keyfile_bufread, Some(keyfile.to_string())) {
+                Ok(i) => match i {
+                    // ssh key
+                    ssh::Identity::Encrypted(_) => loop {
+                        let passphrase =
+                            rpassword::prompt_password("Unlock the supplied ssh key: ")?;
+                        let mut keygen_command = Command::new("ssh-keygen")
+                            .args(["-y", "-P", &passphrase, "-f", keyfile])
+                            .output()?;
+                        if keygen_command.status.success() {
+                            // remove newline
+                            keygen_command.stdout.pop();
                             fs::create_dir_all(store_dir)?;
-                            if use_passphrase {
-                                let mut keyfile_handle = File::open(keyfile)?;
-                                let mut keyfile_content = vec![];
-                                keyfile_handle.read_to_end(&mut keyfile_content)?;
-                                let encryptor =
-                                    age::Encryptor::with_user_passphrase(Secret::new(passphrase));
-                                let mut write_to =
-                                    encryptor.wrap_output(File::create(&identity_file)?)?;
-                                write_to.write_all(&keyfile_content)?;
-                                write_to.finish()?;
-                            } else {
-                                fs::copy(keyfile, identity_file)?;
-                            }
-                            Ok(i.to_public().to_string())
+                            fs::copy(keyfile, store_dir.join(".identity.pass.ssh"))?;
+                            break Ok(String::from_utf8(keygen_command.stdout)?);
+                        } else {
+                            eprintln!("Could not produce public key! Is the passphrase correct? Please try again.");
                         }
+                    },
+                    ssh::Identity::Unencrypted(_) => {
+                        let mut gen_pubkey = Command::new("ssh-keygen")
+                            .args(["-y", "-f", keyfile])
+                            .output()?;
+                        gen_pubkey.status.exit_ok()?;
+                        // remove newline
+                        gen_pubkey.stdout.pop();
+                        println!("Supplied ssh key is unencrypted. It is recommended to encrypt it with a passphrase.");
+                        let passphrase = ask_passphrase_twice()?;
+                        let use_passphrase = !passphrase.is_empty();
+                        let identity_file = store_dir.join(if use_passphrase {
+                            ".identity.pass.ssh"
+                        } else {
+                            ".identity.ssh"
+                        });
+                        fs::create_dir_all(store_dir)?;
+                        fs::copy(keyfile, &identity_file)?;
+                        if use_passphrase {
+                            Command::new("ssh-keygen")
+                                .args(["-p", "-f"])
+                                .arg(&identity_file)
+                                .args(["-N", &passphrase])
+                                .status()?
+                                .exit_ok()?;
+                        }
+                        Ok(String::from_utf8(gen_pubkey.stdout)?)
                     }
-                }
-                Err(_) => {
-                    // three possibilities left:
-                    // 1. encrypted ssh key
-                    // 2. unencrypted ssh key
-                    // 3. encrypted age file
-                    let mut keyfile_bufread = BufReader::new(File::open(keyfile)?);
-                    match ssh::Identity::from_buffer(
-                        &mut keyfile_bufread,
-                        Some(keyfile.to_string()),
-                    ) {
-                        Ok(i) => match i {
-                            // ssh key
-                            ssh::Identity::Encrypted(_) => loop {
-                                let passphrase =
-                                    rpassword::prompt_password("Unlock the supplied ssh key: ")?;
-                                let mut keygen_command = Command::new("ssh-keygen")
-                                    .args(["-y", "-P", &passphrase, "-f", keyfile])
-                                    .output()?;
-                                if keygen_command.status.success() {
-                                    // remove newline
-                                    keygen_command.stdout.pop();
-                                    fs::create_dir_all(store_dir)?;
-                                    fs::copy(keyfile, store_dir.join(".identity.pass.ssh"))?;
-                                    break Ok(String::from_utf8(keygen_command.stdout)?);
-                                } else {
-                                    eprintln!("Could not produce public key! Is the passphrase correct? Please try again.");
-                                }
-                            },
-                            ssh::Identity::Unencrypted(_) => {
-                                let mut gen_pubkey = Command::new("ssh-keygen")
-                                    .args(["-y", "-f", keyfile])
-                                    .output()?;
-                                gen_pubkey.status.exit_ok()?;
-                                // remove newline
-                                gen_pubkey.stdout.pop();
-                                println!("Supplied ssh key is unencrypted. It is recommended to encrypt it with a passphrase.");
-                                let passphrase = ask_passphrase_twice()?;
-                                let use_passphrase = !passphrase.is_empty();
-                                let identity_file = store_dir.join(if use_passphrase {
-                                    ".identity.pass.ssh"
-                                } else {
-                                    ".identity.ssh"
-                                });
-                                fs::create_dir_all(store_dir)?;
-                                fs::copy(keyfile, &identity_file)?;
-                                if use_passphrase {
-                                    Command::new("ssh-keygen")
-                                        .args(["-p", "-f"])
-                                        .arg(&identity_file)
-                                        .args(["-N", &passphrase])
-                                        .status()?
-                                        .exit_ok()?;
-                                }
-                                Ok(String::from_utf8(gen_pubkey.stdout)?)
+                    ssh::Identity::Unsupported(k) => Err(format!(
+                        "Supplied ssh identity key type is not supported by age: {:?}",
+                        k
+                    )
+                    .into()),
+                },
+                Err(_) => loop {
+                    // encrypted age file, hopefully
+                    let decryptor = age::Decryptor::new(File::open(keyfile)?)?;
+                    if !decryptor.is_scrypt() {
+                        return Err("The supplied identity file should be encrypted with a passphrase, not with recipients/identities!".into());
+                    }
+                    let pass = rpassword::prompt_password("Unlock the supplied identity file: ")?;
+                    let mut reader =
+                        match decryptor.decrypt(iter::once(&new_passphrase_identity(&pass) as _)) {
+                            Ok(r) => r,
+                            Err(age::DecryptError::DecryptionFailed) => {
+                                eprintln!("Decryption failed! Wrong passphrase? Please try again.");
+                                continue;
                             }
-                            ssh::Identity::Unsupported(k) => Err(format!(
-                                "Supplied ssh identity key type is not supported by age: {:?}",
-                                k
-                            )
-                            .into()),
-                        },
-                        Err(_) => loop {
-                            // encrypted age file, hopefully
-                            let decryptor = match age::Decryptor::new(File::open(keyfile)?)? {
-                                age::Decryptor::Passphrase(d) => d,
-                                _ => return Err("The supplied identity file should be encrypted with a passphrase, not with recipients/identities!".into()),
-                            };
-                            let pass =
-                                rpassword::prompt_password("Unlock the supplied identity file: ")?;
-                            let reader =
-                                match decryptor.decrypt(&Secret::new(pass.clone()), Some(32)) {
-                                    Ok(r) => r,
-                                    Err(age::DecryptError::DecryptionFailed) => {
-                                        eprintln!(
-                                        "Decryption failed! Wrong passphrase? Please try again."
-                                    );
-                                        continue;
-                                    }
-                                    Err(e) => return Err(Box::new(e)),
-                                };
-                            let pubkey =
-                                match age::IdentityFile::from_buffer(BufReader::new(reader))?
-                                    .into_identities()
-                                    .first()
-                                    .ok_or("No identities in file.")?
-                                {
-                                    age::IdentityFileEntry::Native(i) => i.to_public().to_string(),
-                                };
-                            fs::create_dir_all(store_dir)?;
-                            fs::copy(keyfile, store_dir.join(".identity.age"))?;
-                            break Ok(pubkey);
-                        },
-                    }
-                }
+                            Err(e) => return Err(Box::new(e)),
+                        };
+                    let mut identity_string = String::new();
+                    reader.read_to_string(&mut identity_string)?;
+                    let pubkey = age_identity_from_keyfile_content(&identity_string)?
+                        .to_public()
+                        .to_string();
+                    fs::create_dir_all(store_dir)?;
+                    fs::copy(keyfile, store_dir.join(".identity.age"))?;
+                    return Ok(pubkey);
+                },
             }
         }
     }
@@ -667,18 +661,17 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             // clear text identity
             let identities_native =
                 age::IdentityFile::from_file(identity_file.to_str().unwrap().to_owned())?
-                    .into_identities();
+                    .into_identities()?;
             for identity in identities_native {
-                let age::IdentityFileEntry::Native(identity) = identity;
-                identities.push(Box::new(identity) as Box<dyn age::Identity>);
+                identities.push(identity);
             }
         }
         "age" => loop {
             // passphrase age encrypted identity
-            let identity_decryptor = match age::Decryptor::new(File::open(identity_file)?)? {
-                age::Decryptor::Passphrase(d) => d,
-                _ => return Err(format!("The identity file {} should be encrypted with a passphrase, not with recipients/identities!", identity_file.display()).into()),
-            };
+            let identity_decryptor = age::Decryptor::new(File::open(identity_file)?)?;
+            if !identity_decryptor.is_scrypt() {
+                return Err(format!("The identity file {} should be encrypted with a passphrase, not with recipients/identities!", identity_file.display()).into());
+            }
 
             // for .identity.age the agent saves the string representation of the decrypted
             // identity, instead of the passphrase; this is done for faster decryption
@@ -690,7 +683,10 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
                 );
                 break;
             }
-            let reader = match identity_decryptor.decrypt(&Secret::new(pass.clone()), Some(32)) {
+
+            let mut reader = match identity_decryptor
+                .decrypt(iter::once(&new_passphrase_identity(&pass) as _))
+            {
                 Ok(r) => r,
                 Err(age::DecryptError::DecryptionFailed) => {
                     eprintln!("Decryption failed! Wrong passphrase? Please try again.");
@@ -698,20 +694,14 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
                 }
                 Err(e) => return Err(Box::new(e)),
             };
-            let identities_native =
-                age::IdentityFile::from_buffer(BufReader::new(reader))?.into_identities();
-            let mut once = true;
-            for identity in identities_native {
-                let age::IdentityFileEntry::Native(identity) = identity;
-                if once {
-                    once = false;
-                    agent_set_passphrase(
-                        identity_file.to_str().unwrap(),
-                        identity.to_string().expose_secret(),
-                    );
-                }
-                identities.push(Box::new(identity) as Box<dyn age::Identity>);
-            }
+            let mut identity_str = String::new();
+            reader.read_to_string(&mut identity_str)?;
+            let identity = age_identity_from_keyfile_content(&identity_str)?;
+            agent_set_passphrase(
+                identity_file.to_str().unwrap(),
+                identity.to_string().expose_secret(),
+            );
+            identities.push(Box::new(identity) as Box<dyn age::Identity>);
             break;
         },
         "ssh" => {
@@ -723,7 +713,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
                 ssh::Identity::Encrypted(k) => loop {
                     let (pass, pass_is_from_agent) =
                         get_or_ask_passphrase(identity_file.to_str().unwrap(), &mut try_counter)?;
-                    match k.decrypt(Secret::new(pass.clone())) {
+                    match k.decrypt(SecretString::from(pass.clone())) {
                         Ok(k) => {
                             if !pass_is_from_agent {
                                 agent_set_passphrase(identity_file.to_str().unwrap(), &pass);
@@ -762,16 +752,14 @@ fn decrypt_password(
     identities: &[Box<dyn age::Identity>],
     agefile: &Path,
 ) -> Result<age::stream::StreamReader<File>, Box<dyn Error>> {
-    let password_decryptor = match age::Decryptor::new(File::open(agefile)?)? {
-        age::Decryptor::Recipients(d) => d,
-        _ => {
-            return Err(format!(
+    let password_decryptor = age::Decryptor::new(File::open(agefile)?)?;
+    if password_decryptor.is_scrypt() {
+        return Err(format!(
             "The supplied age-file {} should be encrypted for recipients, not with a passphrase!",
             agefile.display()
         )
-            .into())
-        }
-    };
+        .into());
+    }
 
     Ok(password_decryptor.decrypt(identities.iter().map(|i| i.as_ref()))?)
 }
@@ -964,7 +952,9 @@ fn encrypt_password(
     mut source: impl Read,
     target_file: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let encryptor = age::Encryptor::with_recipients(recipients).ok_or("No recipients supplied!")?;
+    let encryptor = age::Encryptor::with_recipients(
+        recipients.iter().map(|i| i.as_ref() as &dyn age::Recipient),
+    )?;
     let mut writer = encryptor.wrap_output(File::create(target_file)?)?;
     let mut content = vec![];
     source.read_to_end(&mut content)?;
@@ -1587,7 +1577,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
             File::open(identity_file)?.read_to_end(&mut keyfile_content)?;
 
             let new_identity_file = store_dir.join(".identity.age");
-            let encryptor = age::Encryptor::with_user_passphrase(Secret::new(passphrase));
+            let encryptor = age::Encryptor::with_user_passphrase(SecretString::from(passphrase));
             let mut write_to = encryptor.wrap_output(File::create(new_identity_file)?)?;
             write_to.write_all(&keyfile_content)?;
             write_to.finish()?;
@@ -1595,21 +1585,22 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
         }
         "age" => loop {
             // passphrase age encrypted identity
-            let identity_decryptor = match age::Decryptor::new(File::open(identity_file)?)? {
-                age::Decryptor::Passphrase(d) => d,
-                _ => return Err(format!("The identity file {} should be encrypted with a passphrase, not with recipients/identities!", identity_file.display()).into()),
-            };
+            let identity_decryptor = age::Decryptor::new(File::open(identity_file)?)?;
+            if !identity_decryptor.is_scrypt() {
+                return Err(format!("The identity file {} should be encrypted with a passphrase, not with recipients/identities!", identity_file.display()).into());
+            }
 
             let passphrase = rpassword::prompt_password("Enter the current passphrase: ")?;
-            let mut reader =
-                match identity_decryptor.decrypt(&Secret::new(passphrase.clone()), Some(32)) {
-                    Ok(r) => r,
-                    Err(age::DecryptError::DecryptionFailed) => {
-                        eprintln!("Decryption failed! Wrong passphrase? Please try again.");
-                        continue;
-                    }
-                    Err(e) => return Err(Box::new(e)),
-                };
+            let mut reader = match identity_decryptor
+                .decrypt(iter::once(&new_passphrase_identity(&passphrase) as _))
+            {
+                Ok(r) => r,
+                Err(age::DecryptError::DecryptionFailed) => {
+                    eprintln!("Decryption failed! Wrong passphrase? Please try again.");
+                    continue;
+                }
+                Err(e) => return Err(Box::new(e)),
+            };
 
             let mut keyfile_content = vec![];
             reader.read_to_end(&mut keyfile_content)?;
@@ -1627,7 +1618,8 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
             } else {
                 let tmp_dir = tempdir()?;
                 let tmp_identity_file = tmp_dir.path().join(new_identity_filename);
-                let encryptor = age::Encryptor::with_user_passphrase(Secret::new(passphrase));
+                let encryptor =
+                    age::Encryptor::with_user_passphrase(SecretString::from(passphrase));
                 let mut write_to = encryptor.wrap_output(File::create(&tmp_identity_file)?)?;
                 write_to.write_all(&keyfile_content)?;
                 write_to.finish()?;
@@ -1643,7 +1635,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
             )? {
                 ssh::Identity::Encrypted(k) => loop {
                     let passphrase = rpassword::prompt_password("Enter the current passphrase: ")?;
-                    match k.decrypt(Secret::new(passphrase.clone())) {
+                    match k.decrypt(SecretString::from(passphrase.clone())) {
                         Ok(_) => {
                             break passphrase;
                         }
