@@ -8,7 +8,7 @@ A Password Manager Using [age](https://github.com/FiloSottile/age) for Encryptio
 - [Features](#features)
 - [Usage](#usage)
 - [Install](#install)
-- [Import from pass](#import-from-pass)
+- [Import From Another Password Manager](#import-from-another-password-manager)
 - [How It Works](#how-it-works)
 
 ## Features
@@ -181,10 +181,21 @@ sudo make uninstall
 On Termux you should omit the `sudo`.
 Make sure you have the dependencies installed (look at `depends` and `makedepends` in the [PKGBUILD](PKGBUILD)).
 
-## Import from pass
+## Import From Another Password Manager
+### [pass](https://git.zx2c4.com/password-store/)
 Use the script [pass2seniorpw.py](src/importers/pass2seniorpw.py) to import your passwords.
 ```sh
 ./pass2seniorpw.py ~/.password-store "$(senior print-dir)"
+# set a passphrase
+senior change-passphrase
+```
+
+### [KeePass](https://keepassxc.org/)
+First export your database as a CSV file, then use the script
+[keepass2seniorpw.py](src/importers/keepass2seniorpw.py) to import your
+passwords.
+```sh
+./keepass2seniorpw.py exported-passwords.csv "$(senior print-dir)"
 # set a passphrase
 senior change-passphrase
 ```

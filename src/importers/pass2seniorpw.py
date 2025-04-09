@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import os
-import sys
+import socket
 import subprocess
+import sys
 
 def find_age_backend():
     known_backends = ["rage", "age"]
@@ -16,7 +17,7 @@ def main():
     target_dir = None
 
     if "-h" in sys.argv[1:] or "--help" in sys.argv[1:] or len(sys.argv[1:]) != 2:
-        print("Usage: {} <src_dir> <target_dir>".format(sys.argv[0]))
+        print("Usage: {} <src-dir> <target-dir>".format(sys.argv[0]))
         sys.exit()
 
     src_dir = sys.argv[1]
@@ -30,10 +31,11 @@ def main():
     os.makedirs(recipients_dir, exist_ok=True)
     identity = os.path.join(target_dir, ".identity.txt")
     s = subprocess.run(["{}-keygen".format(age), "-o", identity], capture_output=True, text=True)
+    s.check_returncode()
     public_key = s.stderr.strip()[len("Public key: "):]
     recipients_main = os.path.join(recipients_dir, "main.txt")
     with open(recipients_main, "w") as f:
-        f.write("# {}\n".format(os.environ["USER"]))
+        f.write("# {}@{}\n".format(os.environ["USER"], socket.gethostname()))
         f.write("{}\n".format(public_key))
     with open(os.path.join(target_dir, ".gitignore"), "w") as f:
         f.write("/.identity.*\n")
