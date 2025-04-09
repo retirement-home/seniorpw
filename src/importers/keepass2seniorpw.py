@@ -59,7 +59,7 @@ def main():
             totp = row[c["TOTP"]]
 
             dirname = os.path.join(target_dir, group[group.index("/")+1:])
-            filename = os.path.join(dirname, title)
+            filename = os.path.join(dirname, title + ".age")
             content = password
             if user:
                 content += "\nuser: " + user
