@@ -88,9 +88,21 @@ fn get_display_server() -> DisplayServer {
     DisplayServer::Windows
 }
 
+// Converts the path of an identity file to the key used for senior-agent. Most importantly this
+// resolves symbolic links which allows multiple stores to use the same identity without the agent
+// unlocking "both"
+fn agent_key_from_identity_file(identity_file: &Path) -> Result<String, Box<dyn Error>> {
+    Ok(identity_file
+        .canonicalize()?
+        .to_str()
+        .unwrap()
+        .replace('\\', r"\\")
+        .replace(' ', r"\ "))
+}
+
 // returns Ok(None) if the connection to the agent fails (because it is probably not running)
 // returns Ok(None) if the agent does not have the password
-fn agent_get_passphrase(key: &str) -> Result<Option<String>, Box<dyn Error>> {
+fn agent_get_passphrase(identity_file: &Path) -> Result<Option<String>, Box<dyn Error>> {
     let mut buffer = String::new();
     let conn = match local_socket::Stream::connect(get_socket_name().1) {
         Err(e)
@@ -103,7 +115,7 @@ fn agent_get_passphrase(key: &str) -> Result<Option<String>, Box<dyn Error>> {
     };
     let mut conn = BufReader::new(conn);
     conn.get_mut()
-        .write_all(format!("r {}\n", key.replace('\\', r"\\").replace(' ', r"\ ")).as_bytes())?;
+        .write_all(format!("r {}\n", agent_key_from_identity_file(identity_file)?).as_bytes())?;
     conn.read_line(&mut buffer)?;
     // remove trailing newline
     buffer.pop();
@@ -116,8 +128,11 @@ fn agent_get_passphrase(key: &str) -> Result<Option<String>, Box<dyn Error>> {
     }
 }
 
-fn agent_set_passphrase(key: &str, passphrase: &str) {
-    fn agent_set_passphrase_helper(key: &str, passphrase: &str) -> Result<(), Box<dyn Error>> {
+fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
+    fn agent_set_passphrase_helper(
+        identity_file: &Path,
+        passphrase: &str,
+    ) -> Result<(), Box<dyn Error>> {
         let agent_is_running = System::new_all()
             .processes_by_exact_name(OsStr::new("senior-agent"))
             .any(|p| **p.user_id().unwrap() == unsafe { geteuid() });
@@ -169,14 +184,14 @@ fn agent_set_passphrase(key: &str, passphrase: &str) {
         conn.get_mut().write_all(
             format!(
                 "w {} {}\n",
-                key.replace('\\', r"\\").replace(' ', r"\ "),
+                agent_key_from_identity_file(identity_file)?,
                 passphrase
             )
             .as_bytes(),
         )?;
         Ok(())
     }
-    if let Err(e) = agent_set_passphrase_helper(key, passphrase) {
+    if let Err(e) = agent_set_passphrase_helper(identity_file, passphrase) {
         eprintln!("Could not save passphrase to senior-agent: {}", e);
     }
 }
@@ -246,13 +261,16 @@ fn prompt_password(prompt: &str) -> Result<String, Box<dyn Error>> {
 
 // return value: second value in tuple is whether the agent was used
 fn get_or_ask_passphrase(
-    key: &str,
+    identity_file: &Path,
     try_counter: &mut u32,
 ) -> Result<(String, bool), Box<dyn Error>> {
-    let prompt = format!("Enter passphrase to unlock {}", key);
+    let prompt = format!(
+        "Enter passphrase to unlock {}",
+        identity_file.canonicalize()?.display()
+    );
     *try_counter += 1;
     Ok(if *try_counter == 1 {
-        match agent_get_passphrase(key) {
+        match agent_get_passphrase(identity_file) {
             Err(e) => {
                 eprintln!("Unexpected error with socket of senior-agent: {}", e);
                 (prompt_password(&prompt)?, false)
@@ -676,7 +694,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             // for .identity.age the agent saves the string representation of the decrypted
             // identity, instead of the passphrase; this is done for faster decryption
             let (pass, pass_is_from_agent) =
-                get_or_ask_passphrase(identity_file.to_str().unwrap(), &mut try_counter)?;
+                get_or_ask_passphrase(identity_file, &mut try_counter)?;
             if pass_is_from_agent {
                 identities.push(
                     Box::new(age::x25519::Identity::from_str(&pass)?) as Box<dyn age::Identity>
@@ -697,10 +715,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             let mut identity_str = String::new();
             reader.read_to_string(&mut identity_str)?;
             let identity = age_identity_from_keyfile_content(&identity_str)?;
-            agent_set_passphrase(
-                identity_file.to_str().unwrap(),
-                identity.to_string().expose_secret(),
-            );
+            agent_set_passphrase(identity_file, identity.to_string().expose_secret());
             identities.push(Box::new(identity) as Box<dyn age::Identity>);
             break;
         },
@@ -712,11 +727,11 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             )? {
                 ssh::Identity::Encrypted(k) => loop {
                     let (pass, pass_is_from_agent) =
-                        get_or_ask_passphrase(identity_file.to_str().unwrap(), &mut try_counter)?;
+                        get_or_ask_passphrase(identity_file, &mut try_counter)?;
                     match k.decrypt(SecretString::from(pass.clone())) {
                         Ok(k) => {
                             if !pass_is_from_agent {
-                                agent_set_passphrase(identity_file.to_str().unwrap(), &pass);
+                                agent_set_passphrase(identity_file, &pass);
                             }
                             break k;
                         }
@@ -772,10 +787,10 @@ fn unlock(identity_file: &Path, check: bool) -> Result<(), Box<dyn Error>> {
         {
             return Ok(());
         }
-        match agent_get_passphrase(identity_file.to_str().unwrap())? {
+        match agent_get_passphrase(identity_file)? {
             None => Err(format!(
                 "The identity file {} is not cached by senior-agent!",
-                identity_file.display()
+                identity_file.canonicalize()?.display()
             )
             .into()),
             Some(_) => Ok(()),
@@ -1830,7 +1845,7 @@ fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn E
     }
 }
 
-fn get_canonicalised_identity_file(
+fn get_identity_file_of_correct_store(
     store_dir: &Path,
     name: &str,
 ) -> Result<PathBuf, Box<dyn Error>> {
@@ -1913,7 +1928,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }));
 
-    // check existance / non-existance of store
+    // check existence / non-existence of store
     match cli.command {
         // print-dir: not relevant
         CliCommand::PrintDir => {}
@@ -1943,15 +1958,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let canonicalised_identity_file = match cli.command {
         CliCommand::Show { ref name, .. }
         | CliCommand::Edit { ref name }
-        | CliCommand::Rm { ref name, .. } => get_canonicalised_identity_file(&store_dir, name)?,
+        | CliCommand::Rm { ref name, .. } => get_identity_file_of_correct_store(&store_dir, name)?,
         CliCommand::Mv {
             ref old_name,
             ref new_name,
         } => {
             let old_canonicalised_identity_file =
-                get_canonicalised_identity_file(&store_dir, old_name)?;
+                get_identity_file_of_correct_store(&store_dir, old_name)?;
             let new_canonicalised_identity_file =
-                get_canonicalised_identity_file(&store_dir, new_name)?;
+                get_identity_file_of_correct_store(&store_dir, new_name)?;
             if old_canonicalised_identity_file == new_canonicalised_identity_file {
                 old_canonicalised_identity_file
             } else {
@@ -1965,7 +1980,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         CliCommand::AddRecipient { .. }
         | CliCommand::Reencrypt
         | CliCommand::ChangePassphrase
-        | CliCommand::Unlock { .. } => get_canonicalised_identity_file(&store_dir, "")?,
+        | CliCommand::Unlock { .. } => get_identity_file_of_correct_store(&store_dir, "")?,
         _ => PathBuf::new(),
     };
 
