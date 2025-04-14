@@ -79,7 +79,7 @@ def main():
                 else:
                     content += " "
                 content += notes
-            content += "\r\n"
+            content += "\n"
 
             os.makedirs(dirname, exist_ok=True)
             print(f"echo <content> | {age} -e -R {recipients_main} -o {filename}")
