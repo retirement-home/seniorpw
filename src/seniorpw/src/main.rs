@@ -1278,10 +1278,13 @@ fn show(
                 }
             }
             DisplayServer::Termux => {
-                match Command::new("termux-clipboard-set").arg(to_clip).status() {
+                match Command::new("termux-clipboard-set").stdin(Stdio::piped()).spawn() {
                     Err(e) if e.kind() == ErrorKind::NotFound => return Err("Please install Termux:API (https://f-droid.org/en/packages/com.termux.api/) and `pkg install termux-api`!".into()),
                     Err(e) => return Err(e.into()),
-                    Ok(s) => s.exit_ok()?,
+                    Ok(mut c) => {
+                        c.stdin.as_mut().unwrap().write_all(to_clip.as_bytes())?;
+                        c.wait()?.exit_ok()?;
+                    },
                 }
             }
             DisplayServer::Wsl => {
