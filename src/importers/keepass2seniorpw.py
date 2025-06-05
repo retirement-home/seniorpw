@@ -58,7 +58,7 @@ def main():
             notes = row[c["Notes"]]
             totp = row[c["TOTP"]]
 
-            dirname = os.path.join(target_dir, group[group.index("/")+1:])
+            dirname = os.path.join(target_dir, group.split("/", 1)[1])
             filename = os.path.join(dirname, title + ".age")
             content = password
             if user:
@@ -73,11 +73,8 @@ def main():
                 if row[c[col]]:
                     content += "\n" + col + ": " + row[c[col]]
             if notes:
-                content += "notes:"
-                if "\n" in notes:
-                    content += "\n"
-                else:
-                    content += " "
+                content += "\nnotes:"
+                content += "\n" if "\n" in notes else " "
                 content += notes
             content += "\n"
 
