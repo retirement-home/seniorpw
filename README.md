@@ -20,10 +20,11 @@ seniorpw's features are
 - Select and automatically copy or type ([ydotool](https://github.com/ReimuNotMoe/ydotool) or [xdotool](https://github.com/jordansissel/xdotool)) a password via `seniormenu`
 - git support
 - Completions for bash and zsh
-- No config files
 - Passphrase protected identities
 - Passphrases only need to be entered once per session and then get cached by `senior-agent`
 - A store can be shared among a group (encryption for multiple recipients)
+- Search (grep) inside the passwords
+- No config files
 - Symlinks between stores are supported
 
 To do:
@@ -92,7 +93,7 @@ senior git push
 ```
 
 ### Multiple Stores
-You can use multiple stores by using `-s` or `--store`
+You can use multiple stores by setting `-s` or `--store`
 ```sh
 $ ls "$(senior print-dir)"/..
 friends  main  work
@@ -156,6 +157,22 @@ Because this is very cumbersome, seniorpw provides an agent.
 Upon receiving your passphrase once,
 `senior` starts `senior-agent` to cache your identity.
 This way you only have to enter your passphrase once per session.
+
+### Search the Password Contents
+```sh
+senior grep <REGEX PATTERN>
+```
+This searches the password contents of an entire store for a regex pattern.
+Alternatively, use a custom pattern matching program for more sophisticated
+searches.
+```sh
+# using the system's grep
+senior grep grep --color=always -i -n <REGEX PATTERN>
+# using fzf
+senior grep fzf --filter=<REGEX PATTERN> --no-sort
+# using ripgrep
+senior grep rg --color=always -i -n <REGEX PATTERN>
+```
 
 ## Install
 ### Arch BASED Systems

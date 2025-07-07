@@ -20,9 +20,11 @@ use age::secrecy::{ExposeSecret, SecretString};
 use age::{self, ssh};
 use atty::Stream;
 use clap::Parser;
+use grep;
 use interprocess::local_socket::{self, prelude::*};
 use sysinfo::System;
 use tempdir::TempDir;
+use termcolor;
 use walkdir::WalkDir;
 
 use cli::{Cli, CliCommand};
@@ -1848,11 +1850,10 @@ fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn E
     }
 }
 
-fn get_identity_file_of_correct_store(
+fn get_identity_file_from_name_path(
     store_dir: &Path,
-    name: &str,
+    name_path: &Path,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    let name_path = store_dir.join(name);
     let canon_name_path = canonicalise(&name_path)?;
     let senior_dir = store_dir.parent().unwrap().canonicalize()?;
     let canon_store = canon_name_path.strip_prefix(&senior_dir).or(Err(format!(
@@ -1885,6 +1886,143 @@ fn get_identity_file_of_correct_store(
             break Ok(candidate);
         }
     }
+}
+
+fn get_identity_file_of_correct_store(
+    store_dir: &Path,
+    name: &str,
+) -> Result<PathBuf, Box<dyn Error>> {
+    get_identity_file_from_name_path(store_dir, &store_dir.join(name))
+}
+
+fn grep_cmd<'a>(
+    store_dir: &Path,
+    pattern_or_cmd: &'a str,
+    args: &'a [String],
+) -> Result<(), Box<dyn Error>> {
+    enum MatcherOrCmd<'a> {
+        Matcher((grep::regex::RegexMatcher, grep::searcher::Searcher)),
+        Cmd((&'a str, &'a [String])),
+    }
+
+    fn grep_recursive(
+        cur_dir: &Path,
+        identities_map: &mut HashMap<PathBuf, Vec<Box<dyn age::Identity>>>,
+        cur_identity_file: PathBuf,
+        store_dir: &Path,
+        matcher_or_cmd: &MatcherOrCmd,
+        first: &mut bool,
+    ) -> Result<(), Box<dyn Error>> {
+        for entry in cur_dir.read_dir()?.filter(|entry| {
+            !entry
+                .as_ref()
+                .unwrap()
+                .file_name()
+                .to_str()
+                .unwrap()
+                .starts_with('.')
+        }) {
+            let entry = entry?;
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                // if the directory is a symlink then there is a potential for traversing into
+                // another store with another identity_file
+                let new_identity_file = if entry_path.is_symlink() {
+                    let identity_file = get_identity_file_from_name_path(store_dir, &entry_path)?;
+                    if !identities_map.contains_key(&identity_file) {
+                        identities_map
+                            .insert(identity_file.clone(), unlock_identity(&identity_file)?);
+                    }
+                    identity_file
+                } else {
+                    cur_identity_file.clone()
+                };
+                grep_recursive(
+                    &entry_path,
+                    identities_map,
+                    new_identity_file,
+                    store_dir,
+                    matcher_or_cmd,
+                    first,
+                )?;
+                continue;
+            } else if entry_path.extension() != Some(OsStr::new("age")) {
+                continue;
+            }
+
+            let mut reader = decrypt_password(&identities_map[&cur_identity_file], &entry_path)?;
+            let name_path = entry_path.strip_prefix(store_dir)?.with_extension("");
+            match matcher_or_cmd {
+                MatcherOrCmd::Matcher((matcher, searcher)) => {
+                    let mut sb = grep::printer::StandardBuilder::new();
+                    sb.color_specs(grep::printer::ColorSpecs::new(
+                        &grep::printer::default_color_specs(),
+                    ));
+                    searcher.clone().search_reader(
+                        matcher.clone(),
+                        reader,
+                        sb.build(termcolor::StandardStream::stdout(
+                            termcolor::ColorChoice::Auto,
+                        ))
+                        .sink_with_path(matcher.clone(), &name_path),
+                    )?;
+                }
+                MatcherOrCmd::Cmd((cmd, args)) => {
+                    let mut child = match Command::new(*cmd)
+                        .args(*args)
+                        .stdout(Stdio::piped())
+                        .stdin(Stdio::piped())
+                        .spawn()
+                    {
+                        Err(e) if e.kind() == ErrorKind::NotFound => {
+                            eprintln!("Cannot find {}!", cmd);
+                            return Err(e.into());
+                        }
+                        Err(e) => return Err(e.into()),
+                        Ok(c) => c,
+                    };
+
+                    if let Some(mut stdin) = child.stdin.take() {
+                        io::copy(&mut reader, &mut stdin)?;
+                    }
+
+                    if child.wait()?.success() {
+                        let mut child_stdout = String::new();
+                        child.stdout.unwrap().read_to_string(&mut child_stdout)?;
+                        if !*first {
+                            print!("\n");
+                        } else {
+                            *first = false;
+                        }
+                        println!("{}\n{}", name_path.display(), child_stdout.trim());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    let identity_file = get_identity_file_from_name_path(&store_dir, &store_dir)?;
+    let mut identities_map: HashMap<PathBuf, Vec<Box<dyn age::Identity>>> = HashMap::new();
+    identities_map.insert(identity_file.clone(), unlock_identity(&identity_file)?);
+
+    let matcher_or_cmd = if args.is_empty() {
+        MatcherOrCmd::Matcher((
+            grep::regex::RegexMatcher::new(pattern_or_cmd)?,
+            grep::searcher::Searcher::new(),
+        ))
+    } else {
+        MatcherOrCmd::Cmd((pattern_or_cmd, args))
+    };
+
+    grep_recursive(
+        store_dir,
+        &mut identities_map,
+        identity_file,
+        &store_dir,
+        &matcher_or_cmd,
+        &mut true,
+    )
 }
 
 fn home() -> PathBuf {
@@ -2034,5 +2172,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         CliCommand::ChangePassphrase => change_passphrase(&canonicalised_identity_file),
         CliCommand::Unlock { check } => unlock(&canonicalised_identity_file, check),
+        CliCommand::Grep {
+            pattern_or_cmd,
+            args,
+        } => grep_cmd(&store_dir, &pattern_or_cmd, &args),
     }
 }

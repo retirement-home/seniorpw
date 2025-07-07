@@ -113,6 +113,15 @@ pub enum CliCommand {
     /// Change the store's passphrase
     ChangePassphrase,
 
+    /// Search the contents of each password file
+    Grep {
+        /// The regex pattern or the command that should be used for searching
+        pattern_or_cmd: String,
+        /// Arguments for the command that is used for searching
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true, value_hint = ValueHint::CommandWithArguments)]
+        args: Vec<String>,
+    },
+
     /// Unlock a store without showing any password
     Unlock {
         /// Do not prompt to unlock; Return an error if the store is locked;

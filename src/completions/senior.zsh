@@ -160,6 +160,14 @@ _arguments "${_arguments_options[@]}" \
 '--help[Print help]' \
 && ret=0
 ;;
+(grep)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+':pattern_or_cmd -- The regex pattern or the command that should be used for searching:' \
+'*::args -- Arguments for the command that is used for searching:_cmdambivalent' \
+&& ret=0
+;;
 (unlock)
 _arguments "${_arguments_options[@]}" \
 '--check[Do not prompt to unlock; Return an error if the store is locked; Useful for scripts]' \
@@ -223,6 +231,10 @@ _arguments "${_arguments_options[@]}" \
 _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
+(grep)
+_arguments "${_arguments_options[@]}" \
+&& ret=0
+;;
 (unlock)
 _arguments "${_arguments_options[@]}" \
 && ret=0
@@ -254,6 +266,7 @@ _senior_commands() {
 'add-recipient:Add recipient' \
 'reencrypt:Reencrypt the entire store' \
 'change-passphrase:Change the store'\''s passphrase' \
+'grep:Search the contents of each password file using grep' \
 'unlock:Unlock a store without showing any password' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -264,50 +277,30 @@ _senior__add-recipient_commands() {
     local commands; commands=()
     _describe -t commands 'senior add-recipient commands' commands "$@"
 }
-(( $+functions[_senior__help__add-recipient_commands] )) ||
-_senior__help__add-recipient_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior help add-recipient commands' commands "$@"
-}
 (( $+functions[_senior__change-passphrase_commands] )) ||
 _senior__change-passphrase_commands() {
     local commands; commands=()
     _describe -t commands 'senior change-passphrase commands' commands "$@"
-}
-(( $+functions[_senior__help__change-passphrase_commands] )) ||
-_senior__help__change-passphrase_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior help change-passphrase commands' commands "$@"
 }
 (( $+functions[_senior__clone_commands] )) ||
 _senior__clone_commands() {
     local commands; commands=()
     _describe -t commands 'senior clone commands' commands "$@"
 }
-(( $+functions[_senior__help__clone_commands] )) ||
-_senior__help__clone_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior help clone commands' commands "$@"
-}
 (( $+functions[_senior__edit_commands] )) ||
 _senior__edit_commands() {
     local commands; commands=()
     _describe -t commands 'senior edit commands' commands "$@"
-}
-(( $+functions[_senior__help__edit_commands] )) ||
-_senior__help__edit_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior help edit commands' commands "$@"
 }
 (( $+functions[_senior__git_commands] )) ||
 _senior__git_commands() {
     local commands; commands=()
     _describe -t commands 'senior git commands' commands "$@"
 }
-(( $+functions[_senior__help__git_commands] )) ||
-_senior__help__git_commands() {
+(( $+functions[_senior__grep_commands] )) ||
+_senior__grep_commands() {
     local commands; commands=()
-    _describe -t commands 'senior help git commands' commands "$@"
+    _describe -t commands 'senior grep commands' commands "$@"
 }
 (( $+functions[_senior__help_commands] )) ||
 _senior__help_commands() {
@@ -323,10 +316,41 @@ _senior__help_commands() {
 'add-recipient:Add recipient' \
 'reencrypt:Reencrypt the entire store' \
 'change-passphrase:Change the store'\''s passphrase' \
+'grep:Search the contents of each password file' \
 'unlock:Unlock a store without showing any password' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'senior help commands' commands "$@"
+}
+(( $+functions[_senior__help__add-recipient_commands] )) ||
+_senior__help__add-recipient_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help add-recipient commands' commands "$@"
+}
+(( $+functions[_senior__help__change-passphrase_commands] )) ||
+_senior__help__change-passphrase_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help change-passphrase commands' commands "$@"
+}
+(( $+functions[_senior__help__clone_commands] )) ||
+_senior__help__clone_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help clone commands' commands "$@"
+}
+(( $+functions[_senior__help__edit_commands] )) ||
+_senior__help__edit_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help edit commands' commands "$@"
+}
+(( $+functions[_senior__help__git_commands] )) ||
+_senior__help__git_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help git commands' commands "$@"
+}
+(( $+functions[_senior__help__grep_commands] )) ||
+_senior__help__grep_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help grep commands' commands "$@"
 }
 (( $+functions[_senior__help__help_commands] )) ||
 _senior__help__help_commands() {
@@ -338,65 +362,65 @@ _senior__help__init_commands() {
     local commands; commands=()
     _describe -t commands 'senior help init commands' commands "$@"
 }
-(( $+functions[_senior__init_commands] )) ||
-_senior__init_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior init commands' commands "$@"
-}
 (( $+functions[_senior__help__mv_commands] )) ||
 _senior__help__mv_commands() {
     local commands; commands=()
     _describe -t commands 'senior help mv commands' commands "$@"
-}
-(( $+functions[_senior__mv_commands] )) ||
-_senior__mv_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior mv commands' commands "$@"
 }
 (( $+functions[_senior__help__print-dir_commands] )) ||
 _senior__help__print-dir_commands() {
     local commands; commands=()
     _describe -t commands 'senior help print-dir commands' commands "$@"
 }
-(( $+functions[_senior__print-dir_commands] )) ||
-_senior__print-dir_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior print-dir commands' commands "$@"
-}
 (( $+functions[_senior__help__reencrypt_commands] )) ||
 _senior__help__reencrypt_commands() {
     local commands; commands=()
     _describe -t commands 'senior help reencrypt commands' commands "$@"
-}
-(( $+functions[_senior__reencrypt_commands] )) ||
-_senior__reencrypt_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior reencrypt commands' commands "$@"
 }
 (( $+functions[_senior__help__rm_commands] )) ||
 _senior__help__rm_commands() {
     local commands; commands=()
     _describe -t commands 'senior help rm commands' commands "$@"
 }
-(( $+functions[_senior__rm_commands] )) ||
-_senior__rm_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior rm commands' commands "$@"
-}
 (( $+functions[_senior__help__show_commands] )) ||
 _senior__help__show_commands() {
     local commands; commands=()
     _describe -t commands 'senior help show commands' commands "$@"
 }
-(( $+functions[_senior__show_commands] )) ||
-_senior__show_commands() {
-    local commands; commands=()
-    _describe -t commands 'senior show commands' commands "$@"
-}
 (( $+functions[_senior__help__unlock_commands] )) ||
 _senior__help__unlock_commands() {
     local commands; commands=()
     _describe -t commands 'senior help unlock commands' commands "$@"
+}
+(( $+functions[_senior__init_commands] )) ||
+_senior__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior init commands' commands "$@"
+}
+(( $+functions[_senior__mv_commands] )) ||
+_senior__mv_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior mv commands' commands "$@"
+}
+(( $+functions[_senior__print-dir_commands] )) ||
+_senior__print-dir_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior print-dir commands' commands "$@"
+}
+(( $+functions[_senior__reencrypt_commands] )) ||
+_senior__reencrypt_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior reencrypt commands' commands "$@"
+}
+(( $+functions[_senior__rm_commands] )) ||
+_senior__rm_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior rm commands' commands "$@"
+}
+(( $+functions[_senior__show_commands] )) ||
+_senior__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior show commands' commands "$@"
 }
 (( $+functions[_senior__unlock_commands] )) ||
 _senior__unlock_commands() {
