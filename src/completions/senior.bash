@@ -9,6 +9,7 @@ _senior_complete_entries () {
     prefix="${prefix%/}/"
     local suffix=".age"
     local autoexpand=${1:-0}
+    local dirsonly=${2:-0}
 
     local IFS=$'\n'
     local items=($(compgen -f $prefix$cur))
@@ -43,6 +44,9 @@ _senior_complete_entries () {
         # append / to directories
         [[ -d $item ]] && item="$item/"
 
+	# directories only
+	[[ $dirsonly -eq 1 && ! -d $item ]] && continue
+
         item="${item%$suffix}"
         COMPREPLY+=("${item#$prefix}")
         if [[ $i -eq 0 ]]; then
@@ -61,8 +65,12 @@ _senior_complete_entries () {
 _senior() {
     local i cur prev opts cmd
     COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+        cur="$2"
+    else
+        cur="${COMP_WORDS[COMP_CWORD]}"
+    fi
+    prev="$3"
     cmd=""
     opts=""
 
@@ -74,6 +82,9 @@ _senior() {
                 ;;
             senior,add-recipient)
                 cmd="senior__add__recipient"
+                ;;
+            senior,cat)
+                cmd="senior__cat"
                 ;;
             senior,change-passphrase)
                 cmd="senior__change__passphrase"
@@ -116,6 +127,9 @@ _senior() {
                 ;;
             senior__help,add-recipient)
                 cmd="senior__help__add__recipient"
+                ;;
+            senior__help,cat)
+                cmd="senior__help__cat"
                 ;;
             senior__help,change-passphrase)
                 cmd="senior__help__change__passphrase"
@@ -163,7 +177,7 @@ _senior() {
 
     case "${cmd}" in
         senior)
-            opts="-s -h -V --store --help --version init clone edit show mv rm print-dir git add-recipient reencrypt change-passphrase grep unlock help"
+            opts="-s -h -V --store --help --version init clone edit show mv rm print-dir git add-recipient reencrypt change-passphrase grep cat unlock help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -200,6 +214,10 @@ _senior() {
                     ;;
             esac
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__cat)
+            _senior_complete_entries 0 1
             return 0
             ;;
         senior__change__passphrase)
@@ -274,6 +292,20 @@ _senior() {
             return 0
             ;;
         senior__help__add__recipient)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__help__cat)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

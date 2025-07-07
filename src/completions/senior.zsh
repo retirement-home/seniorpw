@@ -1,7 +1,7 @@
 #compdef senior
 
 _senior_stores() {
-	local prefix="$(senior print-dir)"
+	local prefix="$(senior -s main print-dir)"
 	prefix="$(dirname "$prefix")"
 	local stores=( ${prefix}/* )
 	stores=( ${stores[@]#"$prefix"/} )
@@ -32,6 +32,10 @@ _senior_complete_entries_with_subdirs () {
 
 _senior_complete_entries () {
 	_senior_complete_entries_helper -type f
+}
+
+_senior_complete_subdirs () {
+	_senior_complete_entries_helper -type d
 }
 
 autoload -U is-at-least
@@ -96,8 +100,8 @@ _arguments "${_arguments_options[@]}" \
 ;;
 (show|s)
 _arguments "${_arguments_options[@]}" \
-'-k[Show only this key; "password" shows the first line; "otp" generates the one-time password]:otp|login|email|...: ' \
-'--key=[Show only this key; "password" shows the first line; "otp" generates the one-time password]:otp|login|email|...: ' \
+'-k[Show only this key; "password" shows the first line; "otp" generates the one-time password]:otp|user|email|...: ' \
+'--key=[Show only this key; "password" shows the first line; "otp" generates the one-time password]:otp|user|email|...: ' \
 '-c[Add the value to the clipboard]' \
 '--clip[Add the value to the clipboard]' \
 '-h[Print help]' \
@@ -168,6 +172,13 @@ _arguments "${_arguments_options[@]}" : \
 '*::args -- Arguments for the command that is used for searching:_cmdambivalent' \
 && ret=0
 ;;
+(cat)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+'::dirname -- Optionally restrict to a single directory:_senior_complete_subdirs' \
+&& ret=0
+;;
 (unlock)
 _arguments "${_arguments_options[@]}" \
 '--check[Do not prompt to unlock; Return an error if the store is locked; Useful for scripts]' \
@@ -235,6 +246,10 @@ _arguments "${_arguments_options[@]}" \
 _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
+(cat)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (unlock)
 _arguments "${_arguments_options[@]}" \
 && ret=0
@@ -266,7 +281,8 @@ _senior_commands() {
 'add-recipient:Add recipient' \
 'reencrypt:Reencrypt the entire store' \
 'change-passphrase:Change the store'\''s passphrase' \
-'grep:Search the contents of each password file using grep' \
+'grep:Search the contents of each password file' \
+'cat:Show the contents of all password files' \
 'unlock:Unlock a store without showing any password' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -276,6 +292,11 @@ _senior_commands() {
 _senior__add-recipient_commands() {
     local commands; commands=()
     _describe -t commands 'senior add-recipient commands' commands "$@"
+}
+(( $+functions[_senior__cat_commands] )) ||
+_senior__cat_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior cat commands' commands "$@"
 }
 (( $+functions[_senior__change-passphrase_commands] )) ||
 _senior__change-passphrase_commands() {
@@ -317,6 +338,7 @@ _senior__help_commands() {
 'reencrypt:Reencrypt the entire store' \
 'change-passphrase:Change the store'\''s passphrase' \
 'grep:Search the contents of each password file' \
+'cat:Show the contents of all password files' \
 'unlock:Unlock a store without showing any password' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -326,6 +348,11 @@ _senior__help_commands() {
 _senior__help__add-recipient_commands() {
     local commands; commands=()
     _describe -t commands 'senior help add-recipient commands' commands "$@"
+}
+(( $+functions[_senior__help__cat_commands] )) ||
+_senior__help__cat_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help cat commands' commands "$@"
 }
 (( $+functions[_senior__help__change-passphrase_commands] )) ||
 _senior__help__change-passphrase_commands() {

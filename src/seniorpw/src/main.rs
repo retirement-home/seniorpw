@@ -1902,12 +1902,12 @@ struct PasswordIter {
 }
 
 impl PasswordIter {
-    fn new(store_dir: PathBuf) -> Self {
-        let identity_file = get_identity_file_from_name_path(&store_dir, &store_dir).expect(
+    fn new(store_dir: PathBuf, start_dir: PathBuf) -> Self {
+        let identity_file = get_identity_file_from_name_path(&store_dir, &start_dir).expect(
             &format!("Cannot get identity file for {}!", store_dir.display()),
         );
         PasswordIter {
-            walkdir: WalkDir::new(store_dir.clone())
+            walkdir: WalkDir::new(start_dir)
                 .follow_links(true)
                 .contents_first(false)
                 .into_iter(),
@@ -1991,7 +1991,7 @@ fn grep_cmd<'a>(
     };
     let mut first = true;
 
-    for (agefile, mut reader) in PasswordIter::new(store_dir.to_owned()) {
+    for (agefile, mut reader) in PasswordIter::new(store_dir.to_owned(), store_dir.to_owned()) {
         let name_path = agefile.strip_prefix(store_dir)?.with_extension("");
         match matcher_or_cmd {
             MatcherOrCmd::Matcher((ref matcher, ref searcher)) => {
@@ -2031,15 +2031,46 @@ fn grep_cmd<'a>(
                     let mut child_stdout = String::new();
                     child.stdout.unwrap().read_to_string(&mut child_stdout)?;
                     if !first {
-                        print!("\n");
+                        println!();
                     } else {
                         first = false;
                     }
-                    println!("{}\n{}", name_path.display(), child_stdout.trim());
+                    println!("{}\n{}", name_path.display(), child_stdout.trim_end());
                 }
             }
         }
     }
+    Ok(())
+}
+
+fn cat(store_dir: &Path, dirname: &str) -> Result<(), Box<dyn Error>> {
+    let name_dir = store_dir.join(dirname);
+    if !name_dir.exists() || !name_dir.canonicalize()?.is_dir() {
+        return Err(format!("The directory {} does not exist!", name_dir.display()).into());
+    }
+
+    let mut first = true;
+    for (agefile, mut reader) in PasswordIter::new(store_dir.to_owned(), name_dir.to_owned()) {
+        let name_path = agefile.strip_prefix(store_dir)?.with_extension("");
+        if !first {
+            println!();
+        } else {
+            first = false;
+        }
+        let mut content = String::new();
+        match reader.read_to_string(&mut content) {
+            Ok(_) => {}
+            Err(e) if e.kind() == ErrorKind::InvalidData => content = format!("Error: {}", e),
+            Err(e) => return Err(Box::new(e)),
+        }
+        println!(
+            "{}\n{}\n{}",
+            name_path.display(),
+            "—".repeat(name_path.to_str().unwrap().len()),
+            content.trim_end()
+        );
+    }
+
     Ok(())
 }
 
@@ -2194,5 +2225,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             pattern_or_cmd,
             args,
         } => grep_cmd(&store_dir, &pattern_or_cmd, &args),
+        CliCommand::Cat { dirname } => cat(&store_dir, &dirname),
     }
 }

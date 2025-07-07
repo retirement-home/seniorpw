@@ -122,6 +122,13 @@ pub enum CliCommand {
         args: Vec<String>,
     },
 
+    /// Show the contents of all password files
+    Cat {
+        /// Optionally restrict to a single directory
+        #[arg(index = 1, default_value_t = String::from(""), value_hint = ValueHint::FilePath)]
+        dirname: String,
+    },
+
     /// Unlock a store without showing any password
     Unlock {
         /// Do not prompt to unlock; Return an error if the store is locked;

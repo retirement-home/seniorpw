@@ -159,6 +159,7 @@ Upon receiving your passphrase once,
 This way you only have to enter your passphrase once per session.
 
 ### Search the Password Contents
+There are two possibilities: `senior grep` and `senior cat`.
 ```sh
 senior grep <REGEX PATTERN>
 ```
@@ -172,6 +173,14 @@ senior grep grep --color=always -i -n <REGEX PATTERN>
 senior grep fzf --filter=<REGEX PATTERN> --no-sort
 # using ripgrep
 senior grep rg --color=always -i -n <REGEX PATTERN>
+```
+
+Use `senior cat` to print the contents of the entire store or a subdirectory.
+Pipe the output to your favourite pattern matching program.
+```sh
+senior cat | less
+senior cat [dirname] | fzf
+senior cat [dirname] | grep -C 5 -i -n <REGEX PATTERN>
 ```
 
 ## Install
