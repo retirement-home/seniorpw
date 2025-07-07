@@ -1895,6 +1895,82 @@ fn get_identity_file_of_correct_store(
     get_identity_file_from_name_path(store_dir, &store_dir.join(name))
 }
 
+struct PasswordIter {
+    walkdir: walkdir::IntoIter,
+    identities: Vec<Box<dyn age::Identity>>,
+    store_dir: PathBuf,
+}
+
+impl PasswordIter {
+    fn new(store_dir: PathBuf) -> Self {
+        let identity_file = get_identity_file_from_name_path(&store_dir, &store_dir).expect(
+            &format!("Cannot get identity file for {}!", store_dir.display()),
+        );
+        PasswordIter {
+            walkdir: WalkDir::new(store_dir.clone())
+                .follow_links(true)
+                .contents_first(false)
+                .into_iter(),
+            identities: unlock_identity(&identity_file).expect(&format!(
+                "Cannot unlock identity {}!",
+                identity_file.display()
+            )),
+            store_dir,
+        }
+    }
+}
+
+impl Iterator for PasswordIter {
+    // returns a tuple: (name, content)
+    type Item = (PathBuf, age::stream::StreamReader<File>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        fn is_hidden(entry: &walkdir::DirEntry) -> bool {
+            entry
+                .file_name()
+                .to_str()
+                .map(|s| s.starts_with("."))
+                .unwrap_or(false)
+        }
+
+        let agefile: PathBuf = loop {
+            let direntry = self
+                .walkdir
+                .next()?
+                .expect("Cannot unwrap DirEntry for password!");
+            let path = direntry.clone().into_path();
+            if path.is_symlink() {
+                let identity_file =
+                    get_identity_file_from_name_path(&self.store_dir, direntry.path()).expect(
+                        &format!(
+                            "Cannot get identity file for {}!",
+                            direntry.path().display()
+                        ),
+                    );
+                self.identities
+                    .extend(unlock_identity(&identity_file).expect(&format!(
+                        "Cannot unlock identity file {}!",
+                        identity_file.display()
+                    )));
+                continue;
+            } else if path.is_dir() {
+                if is_hidden(&direntry) {
+                    self.walkdir.skip_current_dir();
+                }
+                continue;
+            } else if path.extension() != Some(&OsStr::new("age")) || is_hidden(&direntry) {
+                continue;
+            }
+            break path;
+        };
+        Some((
+            agefile.clone(),
+            decrypt_password(&self.identities, &agefile)
+                .expect(&format!("Unable to decrypt {}!", agefile.display())),
+        ))
+    }
+}
+
 fn grep_cmd<'a>(
     store_dir: &Path,
     pattern_or_cmd: &'a str,
@@ -1905,107 +1981,6 @@ fn grep_cmd<'a>(
         Cmd((&'a str, &'a [String])),
     }
 
-    fn grep_recursive(
-        cur_dir: &Path,
-        identities_map: &mut HashMap<PathBuf, Vec<Box<dyn age::Identity>>>,
-        cur_identity_file: PathBuf,
-        store_dir: &Path,
-        matcher_or_cmd: &MatcherOrCmd,
-        first: &mut bool,
-    ) -> Result<(), Box<dyn Error>> {
-        for entry in cur_dir.read_dir()?.filter(|entry| {
-            !entry
-                .as_ref()
-                .unwrap()
-                .file_name()
-                .to_str()
-                .unwrap()
-                .starts_with('.')
-        }) {
-            let entry = entry?;
-            let entry_path = entry.path();
-            if entry_path.is_dir() {
-                // if the directory is a symlink then there is a potential for traversing into
-                // another store with another identity_file
-                let new_identity_file = if entry_path.is_symlink() {
-                    let identity_file = get_identity_file_from_name_path(store_dir, &entry_path)?;
-                    if !identities_map.contains_key(&identity_file) {
-                        identities_map
-                            .insert(identity_file.clone(), unlock_identity(&identity_file)?);
-                    }
-                    identity_file
-                } else {
-                    cur_identity_file.clone()
-                };
-                grep_recursive(
-                    &entry_path,
-                    identities_map,
-                    new_identity_file,
-                    store_dir,
-                    matcher_or_cmd,
-                    first,
-                )?;
-                continue;
-            } else if entry_path.extension() != Some(OsStr::new("age")) {
-                continue;
-            }
-
-            let mut reader = decrypt_password(&identities_map[&cur_identity_file], &entry_path)?;
-            let name_path = entry_path.strip_prefix(store_dir)?.with_extension("");
-            match matcher_or_cmd {
-                MatcherOrCmd::Matcher((matcher, searcher)) => {
-                    let mut sb = grep::printer::StandardBuilder::new();
-                    sb.color_specs(grep::printer::ColorSpecs::new(
-                        &grep::printer::default_color_specs(),
-                    ));
-                    searcher.clone().search_reader(
-                        matcher.clone(),
-                        reader,
-                        sb.build(termcolor::StandardStream::stdout(
-                            termcolor::ColorChoice::Auto,
-                        ))
-                        .sink_with_path(matcher.clone(), &name_path),
-                    )?;
-                }
-                MatcherOrCmd::Cmd((cmd, args)) => {
-                    let mut child = match Command::new(*cmd)
-                        .args(*args)
-                        .stdout(Stdio::piped())
-                        .stdin(Stdio::piped())
-                        .spawn()
-                    {
-                        Err(e) if e.kind() == ErrorKind::NotFound => {
-                            eprintln!("Cannot find {}!", cmd);
-                            return Err(e.into());
-                        }
-                        Err(e) => return Err(e.into()),
-                        Ok(c) => c,
-                    };
-
-                    if let Some(mut stdin) = child.stdin.take() {
-                        io::copy(&mut reader, &mut stdin)?;
-                    }
-
-                    if child.wait()?.success() {
-                        let mut child_stdout = String::new();
-                        child.stdout.unwrap().read_to_string(&mut child_stdout)?;
-                        if !*first {
-                            print!("\n");
-                        } else {
-                            *first = false;
-                        }
-                        println!("{}\n{}", name_path.display(), child_stdout.trim());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    let identity_file = get_identity_file_from_name_path(&store_dir, &store_dir)?;
-    let mut identities_map: HashMap<PathBuf, Vec<Box<dyn age::Identity>>> = HashMap::new();
-    identities_map.insert(identity_file.clone(), unlock_identity(&identity_file)?);
-
     let matcher_or_cmd = if args.is_empty() {
         MatcherOrCmd::Matcher((
             grep::regex::RegexMatcher::new(pattern_or_cmd)?,
@@ -2014,15 +1989,58 @@ fn grep_cmd<'a>(
     } else {
         MatcherOrCmd::Cmd((pattern_or_cmd, args))
     };
+    let mut first = true;
 
-    grep_recursive(
-        store_dir,
-        &mut identities_map,
-        identity_file,
-        &store_dir,
-        &matcher_or_cmd,
-        &mut true,
-    )
+    for (agefile, mut reader) in PasswordIter::new(store_dir.to_owned()) {
+        let name_path = agefile.strip_prefix(store_dir)?.with_extension("");
+        match matcher_or_cmd {
+            MatcherOrCmd::Matcher((ref matcher, ref searcher)) => {
+                let mut sb = grep::printer::StandardBuilder::new();
+                sb.color_specs(grep::printer::ColorSpecs::new(
+                    &grep::printer::default_color_specs(),
+                ));
+                searcher.clone().search_reader(
+                    matcher.clone(),
+                    reader,
+                    sb.build(termcolor::StandardStream::stdout(
+                        termcolor::ColorChoice::Auto,
+                    ))
+                    .sink_with_path(matcher.clone(), &name_path),
+                )?;
+            }
+            MatcherOrCmd::Cmd((cmd, args)) => {
+                let mut child = match Command::new(cmd)
+                    .args(args)
+                    .stdout(Stdio::piped())
+                    .stdin(Stdio::piped())
+                    .spawn()
+                {
+                    Err(e) if e.kind() == ErrorKind::NotFound => {
+                        eprintln!("Cannot find {}!", cmd);
+                        return Err(e.into());
+                    }
+                    Err(e) => return Err(e.into()),
+                    Ok(c) => c,
+                };
+
+                if let Some(mut stdin) = child.stdin.take() {
+                    io::copy(&mut reader, &mut stdin)?;
+                }
+
+                if child.wait()?.success() {
+                    let mut child_stdout = String::new();
+                    child.stdout.unwrap().read_to_string(&mut child_stdout)?;
+                    if !first {
+                        print!("\n");
+                    } else {
+                        first = false;
+                    }
+                    println!("{}\n{}", name_path.display(), child_stdout.trim());
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn home() -> PathBuf {
