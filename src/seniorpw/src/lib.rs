@@ -20,7 +20,7 @@ pub fn get_socket_name() -> (String, local_socket::Name<'static>) {
     }
 
     let uid = unsafe { geteuid() };
-    let name = format!("senior-agent-{}.sock", uid);
+    let name = format!("senior-agent-{uid}.sock");
     if GenericNamespaced::is_supported() {
         (
             format!("{}{}", "@", &name),

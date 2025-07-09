@@ -14,7 +14,7 @@ fn generate_manpages(dir: &Path) -> Result<()> {
     fn generate(dir: &Path, app: &Command) -> Result<()> {
         std::fs::create_dir_all(dir)?;
         let name = app.get_display_name().unwrap_or_else(|| app.get_name());
-        let mut out = File::create(dir.join(format!("{}.1", name)))?;
+        let mut out = File::create(dir.join(format!("{name}.1")))?;
 
         Man::new(app.clone())
             .title(name.to_uppercase())
@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     )
     .expect("Failed to generate Bash completion");
 
-    println!("cargo:warning=Generated bash completion: {:?}", bash_path);
+    println!("cargo:warning=Generated bash completion: {bash_path:?}");
 
     let zsh_path = generate_to(
         Zsh, &mut cmd, // We need to specify what generator to use
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
     )
     .expect("Failed to generate Zsh completion");
 
-    println!("cargo:warning=Generated zsh completion: {:?}", zsh_path);
+    println!("cargo:warning=Generated zsh completion: {zsh_path:?}");
 
     let out_dir = std::path::PathBuf::from("../man");
     generate_manpages(&out_dir)?;

@@ -20,11 +20,9 @@ use age::secrecy::{ExposeSecret, SecretString};
 use age::{self, ssh};
 use atty::Stream;
 use clap::Parser;
-use grep;
 use interprocess::local_socket::{self, prelude::*};
 use sysinfo::System;
 use tempdir::TempDir;
-use termcolor;
 use walkdir::WalkDir;
 
 use cli::{Cli, CliCommand};
@@ -65,7 +63,7 @@ fn get_display_server() -> DisplayServer {
     // Darwin
     match Command::new("uname").output() {
         Err(e) if e.kind() == ErrorKind::NotFound => {}
-        Err(e) => panic!("Cannot run uname: {}", e),
+        Err(e) => panic!("Cannot run uname: {e}"),
         Ok(o) => {
             if std::str::from_utf8(&o.stdout)
                 .expect("Cannot convert output of `uname` to UTF8!")
@@ -148,7 +146,7 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
                             || e.kind() == io::ErrorKind::NotFound) =>
                 {
                     if agent_is_running {
-                        return Err(format!("senior-agent is running, but no socket connection could be established: {}", e).into());
+                        return Err(format!("senior-agent is running, but no socket connection could be established: {e}").into());
                     }
                     // Try once to start senior-agent
                     once = false;
@@ -194,7 +192,7 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
         Ok(())
     }
     if let Err(e) = agent_set_passphrase_helper(identity_file, passphrase) {
-        eprintln!("Could not save passphrase to senior-agent: {}", e);
+        eprintln!("Could not save passphrase to senior-agent: {e}");
     }
 }
 
@@ -215,7 +213,7 @@ fn prompt_password(prompt: &str) -> Result<String, Box<dyn Error>> {
     }
 
     if atty::is(Stream::Stdout) {
-        Ok(rpassword::prompt_password(format!("{}: ", prompt))?)
+        Ok(rpassword::prompt_password(format!("{prompt}: "))?)
     } else {
         // People are used to pass and gnupg; Get their preferred pinentry program from their
         // gpg-agent.conf
@@ -247,7 +245,7 @@ fn prompt_password(prompt: &str) -> Result<String, Box<dyn Error>> {
         let mut stdout_reader = BufReader::new(child.stdout.unwrap());
         let mut stdin_writer = child.stdin.unwrap();
         read_ok(&mut stdout_reader, &pinentry_program)?;
-        stdin_writer.write_all(format!("SETPROMPT {}\n", prompt).as_bytes())?;
+        stdin_writer.write_all(format!("SETPROMPT {prompt}\n").as_bytes())?;
         read_ok(&mut stdout_reader, &pinentry_program)?;
         stdin_writer.write_all("GETPIN\n".as_bytes())?;
         let mut pass = String::new();
@@ -274,7 +272,7 @@ fn get_or_ask_passphrase(
     Ok(if *try_counter == 1 {
         match agent_get_passphrase(identity_file) {
             Err(e) => {
-                eprintln!("Unexpected error with socket of senior-agent: {}", e);
+                eprintln!("Unexpected error with socket of senior-agent: {e}");
                 (prompt_password(&prompt)?, false)
             }
             Ok(None) => (prompt_password(&prompt)?, false),
@@ -430,8 +428,7 @@ fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String,
                         Ok(String::from_utf8(gen_pubkey.stdout)?)
                     }
                     ssh::Identity::Unsupported(k) => Err(format!(
-                        "Supplied ssh identity key type is not supported by age: {:?}",
-                        k
+                        "Supplied ssh identity key type is not supported by age: {k:?}"
                     )
                     .into()),
                 },
@@ -498,7 +495,7 @@ fn init(
         let mut gitignore_file = File::create(gitignore)?;
         gitignore_file.write_all(b"/.identity.*\n")?;
         let mut recipients_main_file = File::create(recipients_main)?;
-        write!(recipients_main_file, "# {}\n{}\n", recipient_alias, pubkey)?;
+        write!(recipients_main_file, "# {recipient_alias}\n{pubkey}\n")?;
         println!("Created {}", store_dir.display());
         Ok(())
     }
@@ -529,8 +526,7 @@ fn find_pubkey_in_recipients(recipients_dir: &Path, pubkey: &str) -> Option<Stri
             // there should always be at least one space in an ssh public key
             assert!(
                 space_indices.next().is_some(),
-                "There is no space in this ssh key! {}",
-                public_key
+                "There is no space in this ssh key! {public_key}"
             );
             match space_indices.next() {
                 // no comment => return entire string
@@ -612,8 +608,7 @@ fn git_clone(
                 find_pubkey_in_recipients(&store_dir.join(".recipients"), &pubkey)
             {
                 println!(
-                    "The public key of the supplied identity file is already a recipient in {}.",
-                    filepos
+                    "The public key of the supplied identity file is already a recipient in {filepos}.",
                 );
                 println!("You should be able to decrypt passwords now.");
                 return Ok(());
@@ -840,7 +835,7 @@ fn edit_file_with_editor(path: &Path) -> Result<String, Box<dyn Error>> {
         match Command::new(editor).args(args).arg(path).status() {
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 if editor_env_set {
-                    eprintln!("EDITOR set to {0}, but cannot start {0}!", editor);
+                    eprintln!("EDITOR set to {editor}, but cannot start {editor}!");
                     editor_env_set = false
                 }
                 continue;
@@ -849,7 +844,7 @@ fn edit_file_with_editor(path: &Path) -> Result<String, Box<dyn Error>> {
             Ok(s) => return s.exit_ok().map(|()| editor.to_string()),
         }
     }
-    Err(format!("Please set the EDITOR environment variable to an installed editor! Cannot start any of the following editors: {:?}", editors).into())
+    Err(format!("Please set the EDITOR environment variable to an installed editor! Cannot start any of the following editors: {editors:?}").into())
 }
 
 // This is a helper trait to make the dynamic trait age::Recipient cloneable
@@ -892,7 +887,7 @@ fn recipient_from_str(line: &str) -> Result<Box<dyn RecipientClone>, Box<dyn Err
     if line.starts_with("ssh-") {
         ssh::Recipient::from_str(line)
             .map(|r| Box::new(r) as Box<dyn RecipientClone>)
-            .map_err(|e| format!("{:?}", e).into())
+            .map_err(|e| format!("{e:?}").into())
     } else {
         age::x25519::Recipient::from_str(line)
             .map(|r| Box::new(r) as Box<dyn RecipientClone>)
@@ -990,7 +985,7 @@ fn check_for_git(canon_store_dir: &Path) -> bool {
         .status()
     {
         Err(e) if e.kind() == ErrorKind::NotFound => false,
-        Err(e) => panic!("Cannot run git rev-parse! {}", e),
+        Err(e) => panic!("Cannot run git rev-parse! {e}"),
         Ok(s) => s.success(),
     }
 }
@@ -1024,7 +1019,7 @@ fn git_commit(store_dir: &Path, message: &str) -> Result<(), Box<dyn Error>> {
 // encrypt via identity_file.parent()/.recipients/
 fn edit(identity_file: &Path, store_dir: &Path, name: String) -> Result<(), Box<dyn Error>> {
     let canon_store_dir = identity_file.parent().unwrap();
-    let agefile = canonicalise(&store_dir.join(format!("{}.age", name)))?;
+    let agefile = canonicalise(&store_dir.join(format!("{name}.age")))?;
 
     let tmp_dir = tempdir()?;
     let tmpfile_txt = tmp_dir
@@ -1067,7 +1062,7 @@ fn edit(identity_file: &Path, store_dir: &Path, name: String) -> Result<(), Box<
         RecipientStrIter::new(&canon_store_dir.join(".recipients"))
             .map(|(pubkey_str, pathpos)| {
                 recipient_from_str(&pubkey_str)
-                    .unwrap_or_else(|_| panic!("Cannot process {}!", pathpos))
+                    .unwrap_or_else(|_| panic!("Cannot process {pathpos}!"))
                     .to_recipient()
             })
             .collect(),
@@ -1153,7 +1148,7 @@ fn show(
         if name.is_empty() {
             println!("{}", store_dir.display());
         } else {
-            println!("{}", name);
+            println!("{name}");
         }
 
         let mut tree = Command::new("tree")
@@ -1162,9 +1157,9 @@ fn show(
             .output()
             .unwrap_or_else(|e| {
                 if e.kind() == ErrorKind::NotFound {
-                    panic!("Cannot find `tree` in $PATH: {:?}", e);
+                    panic!("Cannot find `tree` in $PATH: {e:?}");
                 } else {
-                    panic!("Cannot run `tree` command: {:?}", e);
+                    panic!("Cannot run `tree` command: {e:?}");
                 }
             });
         tree.status.exit_ok()?;
@@ -1221,7 +1216,7 @@ fn show(
             key => {
                 let key_to_search = match key {
                     "otp" => String::from("otpauth:"),
-                    k => format!("{}:", k),
+                    k => format!("{k}:"),
                 };
                 let mut lines = output.split('\n');
                 let value = loop {
@@ -1258,7 +1253,7 @@ fn show(
             }
         },
     };
-    println!("{}", to_print);
+    println!("{to_print}");
     // TODO: support Windows
     if clip {
         match get_display_server() {
@@ -1508,7 +1503,7 @@ fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
         RecipientStrIter::new(&identity_file.parent().unwrap().join(".recipients"))
             .map(|(pubkey_str, pathpos)| {
                 recipient_from_str(&pubkey_str)
-                    .unwrap_or_else(|_| panic!("Cannot process {}!", pathpos))
+                    .unwrap_or_else(|_| panic!("Cannot process {pathpos}!"))
             })
             .collect();
     reencrypt_recursive(
@@ -1538,18 +1533,16 @@ fn add_recipient(
     alias: String,
 ) -> Result<(), Box<dyn Error>> {
     if let Err(e) = recipient_from_str(&public_key) {
-        return Err(format!(
-            "The supplied recipient is not a valid age or ssh public key! {}",
-            e
-        )
-        .into());
+        return Err(
+            format!("The supplied recipient is not a valid age or ssh public key! {e}").into(),
+        );
     }
 
     let recipients_dir = identity_file.parent().unwrap().join(".recipients");
 
     // check if public_key is not already a recipient
     if let Some(filepos) = find_pubkey_in_recipients(&recipients_dir, public_key.trim()) {
-        return Err(format!("Recipient already in {}!", filepos).into());
+        return Err(format!("Recipient already in {filepos}!").into());
     }
 
     // choose the only existing file or use main.txt
@@ -1818,10 +1811,7 @@ fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn E
         // check without git fetch
         if git_remote_is_ahead(store_dir) {
             eprintln!("\nWARNING! The remote branch is ahead of your local branch! Reencrypting the entire store will almost certainly lead to merge conflicts!");
-            eprintln!(
-                "It is highly advised to do `{}` first!",
-                senior_git_pull_cmd_str
-            );
+            eprintln!("It is highly advised to do `{senior_git_pull_cmd_str}` first!");
             if continue_anyway()? {
                 return Ok(());
             } else {
@@ -1833,10 +1823,7 @@ fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn E
         } else if !git_fetch(store_dir) {
             // Could not git fetch. Probably no internet connection.
             eprintln!("\nWARNING! Cannot `git fetch` right now. Reencrypting the entire store can lead to merge conflicts!");
-            eprintln!(
-                "It is highly advised to do `{}` first!",
-                senior_git_pull_cmd_str
-            );
+            eprintln!("It is highly advised to do `{senior_git_pull_cmd_str}` first!");
             if continue_anyway()? {
                 return Ok(());
             } else {
@@ -1854,7 +1841,7 @@ fn get_identity_file_from_name_path(
     store_dir: &Path,
     name_path: &Path,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    let canon_name_path = canonicalise(&name_path)?;
+    let canon_name_path = canonicalise(name_path)?;
     let senior_dir = store_dir.parent().unwrap().canonicalize()?;
     let canon_store = canon_name_path.strip_prefix(&senior_dir).or(Err(format!(
         "Path {} is outside of the senior directory {}!",
@@ -1903,18 +1890,15 @@ struct PasswordIter {
 
 impl PasswordIter {
     fn new(store_dir: PathBuf, start_dir: PathBuf) -> Self {
-        let identity_file = get_identity_file_from_name_path(&store_dir, &start_dir).expect(
-            &format!("Cannot get identity file for {}!", store_dir.display()),
-        );
+        let identity_file = get_identity_file_from_name_path(&store_dir, &start_dir)
+            .unwrap_or_else(|_| panic!("Cannot get identity file for {}!", store_dir.display()));
         PasswordIter {
             walkdir: WalkDir::new(start_dir)
                 .follow_links(true)
                 .contents_first(false)
                 .into_iter(),
-            identities: unlock_identity(&identity_file).expect(&format!(
-                "Cannot unlock identity {}!",
-                identity_file.display()
-            )),
+            identities: unlock_identity(&identity_file)
+                .unwrap_or_else(|_| panic!("Cannot unlock identity {}!", identity_file.display())),
             store_dir,
         }
     }
@@ -1941,24 +1925,24 @@ impl Iterator for PasswordIter {
             let path = direntry.clone().into_path();
             if path.is_symlink() {
                 let identity_file =
-                    get_identity_file_from_name_path(&self.store_dir, direntry.path()).expect(
-                        &format!(
-                            "Cannot get identity file for {}!",
-                            direntry.path().display()
-                        ),
-                    );
+                    get_identity_file_from_name_path(&self.store_dir, direntry.path())
+                        .unwrap_or_else(|_| {
+                            panic!(
+                                "Cannot get identity file for {}!",
+                                direntry.path().display()
+                            )
+                        });
                 self.identities
-                    .extend(unlock_identity(&identity_file).expect(&format!(
-                        "Cannot unlock identity file {}!",
-                        identity_file.display()
-                    )));
+                    .extend(unlock_identity(&identity_file).unwrap_or_else(|_| {
+                        panic!("Cannot unlock identity file {}!", identity_file.display())
+                    }));
                 continue;
             } else if path.is_dir() {
                 if is_hidden(&direntry) {
                     self.walkdir.skip_current_dir();
                 }
                 continue;
-            } else if path.extension() != Some(&OsStr::new("age")) || is_hidden(&direntry) {
+            } else if path.extension() != Some(OsStr::new("age")) || is_hidden(&direntry) {
                 continue;
             }
             break path;
@@ -1966,7 +1950,7 @@ impl Iterator for PasswordIter {
         Some((
             agefile.clone(),
             decrypt_password(&self.identities, &agefile)
-                .expect(&format!("Unable to decrypt {}!", agefile.display())),
+                .unwrap_or_else(|_| panic!("Unable to decrypt {}!", agefile.display())),
         ))
     }
 }
@@ -1977,14 +1961,19 @@ fn grep_cmd<'a>(
     args: &'a [String],
 ) -> Result<(), Box<dyn Error>> {
     enum MatcherOrCmd<'a> {
-        Matcher((grep::regex::RegexMatcher, grep::searcher::Searcher)),
+        Matcher(
+            (
+                Box<grep::regex::RegexMatcher>,
+                Box<grep::searcher::Searcher>,
+            ),
+        ),
         Cmd((&'a str, &'a [String])),
     }
 
     let matcher_or_cmd = if args.is_empty() {
         MatcherOrCmd::Matcher((
-            grep::regex::RegexMatcher::new(pattern_or_cmd)?,
-            grep::searcher::Searcher::new(),
+            Box::new(grep::regex::RegexMatcher::new(pattern_or_cmd)?),
+            Box::new(grep::searcher::Searcher::new()),
         ))
     } else {
         MatcherOrCmd::Cmd((pattern_or_cmd, args))
@@ -1999,13 +1988,13 @@ fn grep_cmd<'a>(
                 sb.color_specs(grep::printer::ColorSpecs::new(
                     &grep::printer::default_color_specs(),
                 ));
-                searcher.clone().search_reader(
-                    matcher.clone(),
+                searcher.as_ref().clone().search_reader(
+                    matcher.as_ref().clone(),
                     reader,
                     sb.build(termcolor::StandardStream::stdout(
                         termcolor::ColorChoice::Auto,
                     ))
-                    .sink_with_path(matcher.clone(), &name_path),
+                    .sink_with_path(matcher.as_ref().clone(), &name_path),
                 )?;
             }
             MatcherOrCmd::Cmd((cmd, args)) => {
@@ -2016,7 +2005,7 @@ fn grep_cmd<'a>(
                     .spawn()
                 {
                     Err(e) if e.kind() == ErrorKind::NotFound => {
-                        eprintln!("Cannot find {}!", cmd);
+                        eprintln!("Cannot find {cmd}!");
                         return Err(e.into());
                     }
                     Err(e) => return Err(e.into()),
@@ -2060,7 +2049,7 @@ fn cat(store_dir: &Path, dirname: &str) -> Result<(), Box<dyn Error>> {
         let mut content = String::new();
         match reader.read_to_string(&mut content) {
             Ok(_) => {}
-            Err(e) if e.kind() == ErrorKind::InvalidData => content = format!("Error: {}", e),
+            Err(e) if e.kind() == ErrorKind::InvalidData => content = format!("Error: {e}"),
             Err(e) => return Err(Box::new(e)),
         }
         println!(
@@ -2160,11 +2149,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             if old_canonicalised_identity_file == new_canonicalised_identity_file {
                 old_canonicalised_identity_file
             } else {
-                return Err(format!(
-                    "{} and {} are not part of the same store!",
-                    old_name, new_name
-                )
-                .into());
+                return Err(
+                    format!("{old_name} and {new_name} are not part of the same store!").into(),
+                );
             }
         }
         CliCommand::AddRecipient { .. }

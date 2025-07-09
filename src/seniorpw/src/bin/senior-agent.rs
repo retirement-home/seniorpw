@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 break;
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 continue;
             }
             Ok(_) => {}
@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let key = &buffer[2..];
                 match passphrases.contains_key(key) {
                     true => writeln!(&mut conn, "o: {}", &passphrases[key])?,
-                    false => writeln!(&mut conn, "e: Key {} is not present!", key)?,
+                    false => writeln!(&mut conn, "e: Key {key} is not present!")?,
                 }
             }
             "w" => {
