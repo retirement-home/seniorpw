@@ -1,0 +1,124 @@
+.all_stages_rules: &all_stages_rules
+  changes:
+    - .gitlab-ci.yml
+
+.rust_code_rules: &rust_code_rules
+  changes:
+    - src/seniorpw/**/*.rs
+    - src/seniorpw/Cargo.toml
+    - src/seniorpw/Cargo.lock
+
+variables:
+  # move cargo data into the project directory so it can be cached
+  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+  # treat compiler warnings as errors (in clippy, when running tests, etc.)
+  RUSTFLAGS: -Dwarnings
+
+default:
+  # cancel the job if a newer pipeline starts for the same MR or branch
+  interruptible: true
+  cache:
+    # use the git branch or tag as cache key, so the cache will be
+    # shared among CI runs for the same branch or tag
+    key: ${CI_COMMIT_REF_SLUG}
+    # we cache .cargo/ and target/, which effectively enables
+    # incremental builds across different executions of the CI
+    # for the same branch or the same merge request
+    paths:
+      - .cargo
+      - src/seniorpw/target
+
+stages:
+  - test
+  - prepare-release
+  - build
+  - upload
+  - release
+
+tests:
+  stage: test
+  image: docker.io/rust
+  rules:
+    - *all_stages_rules
+    - *rust_code_rules
+  script:
+    - rustup component add rustfmt clippy
+    - cd src/seniorpw
+    - cargo fmt --check
+    - cargo clippy --all-targets
+
+prepare_release:
+  stage: prepare-release
+  image: registry.gitlab.com/gitlab-org/cli
+  rules:
+    - *all_stages_rules
+    - *rust_code_rules
+  script:
+    - echo "Getting version string from Cargo.toml"
+    - PKG_VERSION="$(grep '^version = "' src/seniorpw/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"$/\1/')"
+    - echo "$PKG_VERSION"
+    - echo "PKG_VERSION=$PKG_VERSION" >> variables.env
+    - echo "$CI_PROJECT_URL"
+    - PKG_VERSION_PREV="$(glab -R "$CI_PROJECT_URL" release view | head -n 1)"
+    - echo "$PKG_VERSION_PREV"
+    - CONTINUE_PIPELINE=false
+    - test "$PKG_VERSION" != "$PKG_VERSION_PREV" && CONTINUE_PIPELINE=true
+    - echo "CONTINUE_PIPELINE=$CONTINUE_PIPELINE" >> variables.env
+    - echo "UPLOAD_URL=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/seniorpw/$PKG_VERSION" >> variables.env
+    - cat variables.env
+  artifacts:
+    reports:
+      dotenv: variables.env
+
+build-linux:
+  stage: build
+  image: docker.io/rust
+  rules:
+    - *all_stages_rules
+    - *rust_code_rules
+  script:
+    - '[ "$CONTINUE_PIPELINE" != true ] && exit 0'
+    - cd src/seniorpw/
+    - cargo build --release
+    - cd ../../
+    - mkdir bin
+    - mv src/seniorpw/target/release/senior bin/senior-linux-amd64-$PKG_VERSION
+    - mv src/seniorpw/target/release/senior-agent bin/senior-agent-linux-amd64-$PKG_VERSION
+    - ls -la bin/
+  artifacts:
+    paths:
+      - bin/
+
+upload:
+  stage: upload
+  image: curlimages/curl:latest
+  rules:
+    - *all_stages_rules
+    - *rust_code_rules
+  script:
+    - '[ "$CONTINUE_PIPELINE" != true ] && exit 0'
+    - |
+      for file in ./bin/*; do
+        filename=$(basename "$file")
+        curl --location --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+            --upload-file "$file" \
+            "$UPLOAD_URL/$filename"
+      done
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - *all_stages_rules
+    - *rust_code_rules
+  script:
+    - '[ "$CONTINUE_PIPELINE" != true ] && exit 0'
+    - |
+      release-cli create \
+      --name "$PKG_VERSION" \
+      --tag-name $PKG_VERSION \
+      --assets-link "{\"name\":\"senior-linux-amd64-$PKG_VERSION\",\"url\":\"$UPLOAD_URL/senior-linux-amd64-$PKG_VERSION\"}" \
+      --assets-link "{\"name\":\"senior-agent-linux-amd64-$PKG_VERSION\",\"url\":\"$UPLOAD_URL/senior-agent-linux-amd64-$PKG_VERSION\"}" \
+      --assets-link "{\"name\":\"seniormenu-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/seniormenu?inline=false\"}" \
+      --assets-link "{\"name\":\"senior-zsh-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.zsh?inline=false\"}" \
+      --assets-link "{\"name\":\"senior-bash-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.bash?inline=false\"}"
