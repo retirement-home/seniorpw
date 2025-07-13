@@ -59,7 +59,7 @@ prepare_release:
     - echo "$PKG_VERSION"
     - echo "PKG_VERSION=$PKG_VERSION" >> variables.env
     - echo "$CI_PROJECT_URL"
-    - PKG_VERSION_PREV="$(glab -R "$CI_PROJECT_URL" release view || true | head -n 1)"
+    - PKG_VERSION_PREV="$(glab -R "$CI_PROJECT_URL" release view | head -n 1)"
     - echo "$PKG_VERSION_PREV"
     - CONTINUE_PIPELINE=false
     - test "$PKG_VERSION" != "$PKG_VERSION_PREV" && CONTINUE_PIPELINE=true
