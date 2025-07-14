@@ -6,6 +6,7 @@ A Password Manager Using [age](https://github.com/FiloSottile/age) for Encryptio
 
 ## Contents
 - [Features](#features)
+- [Comparison with Alternatives](#comparison-with-alternatives)
 - [Usage](#usage)
 - [Install](#install)
 - [Import From Another Password Manager](#import-from-another-password-manager)
@@ -31,6 +32,20 @@ To do:
 - Android app
 - Browser Add-On
 - More import scripts
+
+### Comparison with Alternatives
+| Name | Backend | Encrypted Identities | Agent | git | Configless | Language |
+| - | - | - | - | - | - | - |
+| [Pa-rs E](https://gitlab.com/mchal_/parse) | - | - | - | - | ❌ | Rust |
+| [pasejo](https://github.com/metio/pasejo) | age | ❌ | - | ✅ | ❌ | Rust |
+| [psswd](https://github.com/Gogopex/psswd) | age | ❌ scrypt | ❌ | ❌ | ✅ | Rust |
+| [privage](https://github.com/revelaction/privage) | age | yubikey | - | ✅ | ✅ | Go |
+| [neopass](https://github.com/nwehr/neopass) | age | ✅ | ❌ | - | ❌ | Go |
+| [passage](https://github.com/FiloSottile/passage) | age | ✅ | ❌ | ✅ | ✅ | Bash |
+| [pa](https://passwordass.org/) | age | ✅ | ❌ | ✅ | ✅ | POSIX Shell |
+| [kbs2](https://github.com/woodruffw/kbs2) | age | ✅ | ✅ | ❌ | ❌ | Rust |
+| [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ✅ | Go |
+| [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ✅ | ✅ | Rust |
 
 ## Usage
 ### Create a New Store
