@@ -13,7 +13,7 @@ A Password Manager Using [age](https://github.com/FiloSottile/age) for Encryptio
 - [How It Works](#how-it-works)
 
 ## Features
-It is inspired by [pass](https://git.zx2c4.com/password-store/).
+It is inspired by [pass](https://www.passwordstore.org/).
 seniorpw's features are
 - Multiple stores
 - OTP support
@@ -34,18 +34,19 @@ To do:
 - More import scripts
 
 ### Comparison with Alternatives
-| Name | Backend | Encrypted Identities | Agent | git | Configless | Language |
-| - | - | - | - | - | - | - |
-| [Pa-rs E](https://gitlab.com/mchal_/parse) | - | - | - | - | ❌ | Rust |
-| [pasejo](https://github.com/metio/pasejo) | age | ❌ | - | ✅ | ❌ | Rust |
-| [psswd](https://github.com/Gogopex/psswd) | age | ❌ scrypt | ❌ | ❌ | ✅ | Rust |
-| [privage](https://github.com/revelaction/privage) | age | yubikey | - | ✅ | ✅ | Go |
-| [neopass](https://github.com/nwehr/neopass) | age | ✅ | ❌ | - | ❌ | Go |
-| [passage](https://github.com/FiloSottile/passage) | age | ✅ | ❌ | ✅ | ✅ | Bash |
-| [pa](https://passwordass.org/) | age | ✅ | ❌ | ✅ | ✅ | POSIX Shell |
-| [kbs2](https://github.com/woodruffw/kbs2) | age | ✅ | ✅ | ❌ | ❌ | Rust |
-| [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ✅ | Go |
-| [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ✅ | ✅ | Rust |
+| Name | Backend | Encrypted Identities | Agent | git | TOTP | Configless | Language |
+| - | - | - | - | - | - | - | - |
+| [pasejo](https://github.com/metio/pasejo) | age | ❌ | - | ✅ | ✅ | ❌ | Rust |
+| [psswd](https://github.com/Gogopex/psswd) | age | ❌ scrypt | ❌ | ❌ | ❌ | ✅ | Rust |
+| [Pa-rs E](https://gitlab.com/mchal_/parse) | - | - | - | - | ❌ | ❌ | Rust |
+| [privage](https://github.com/revelaction/privage) | age | yubikey | - | ✅ | ❌ | ✅ | Go |
+| [neopass](https://github.com/nwehr/neopass) | age | ✅ | ❌ | - | ❌ | ❌ | Go |
+| [pa](https://passwordass.org/) | age | ✅ | ❌ | ✅ | ❌ | ✅ | POSIX Shell |
+| [passage](https://github.com/FiloSottile/passage) | age | ✅ | ❌ | ✅ | [✅](https://github.com/tadfisher/pass-otp/pull/178) | ✅ | Bash |
+| [kbs2](https://github.com/woodruffw/kbs2) | age | ✅ | ✅ | ❌ | ❌ | ❌ | Rust |
+| [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ❌ | ✅ | Go |
+| [pass](https://www.passwordstore.org/) | gpg | ✅ | ✅ gpg-agent | ✅ | [✅](https://github.com/tadfisher/pass-otp) | ✅ | Bash |
+| [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ✅ | ✅ | ✅ | Rust |
 
 ## Usage
 ### Create a New Store
