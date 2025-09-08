@@ -1,0 +1,8 @@
+[target.'cfg(all(target_arch = "aarch64", target_os = "linux"))']
+linker = "aarch64-linux-gnu-gcc"
+
+[target.'cfg(all(target_arch = "aarch64", target_os = "android"))']
+linker = "aarch64-linux-android35-clang"
+
+[target.'cfg(all(target_arch = "arm", target_os = "android"))']
+linker = "armv7a-linux-androideabi35-clang"

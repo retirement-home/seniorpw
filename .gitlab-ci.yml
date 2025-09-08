@@ -65,12 +65,13 @@ prepare_release:
     - test "$PKG_VERSION" != "$PKG_VERSION_PREV" && CONTINUE_PIPELINE=true
     - echo "CONTINUE_PIPELINE=$CONTINUE_PIPELINE" >> variables.env
     - echo "UPLOAD_URL=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/seniorpw/$PKG_VERSION" >> variables.env
+    - echo 'TARGETTRIPLES=aarch64-linux-android aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu' >> variables.env
     - cat variables.env
   artifacts:
     reports:
       dotenv: variables.env
 
-build-linux:
+build:
   stage: build
   image: docker.io/rust
   rules:
@@ -78,13 +79,24 @@ build-linux:
     - *rust_code_rules
   script:
     - '[ "$CONTINUE_PIPELINE" != true ] && exit 0'
-    - cd src/seniorpw/
-    - cargo build --release
-    - cd ../../
+    - apt-get update
+    - apt-get install -y gcc-aarch64-linux-gnu
+    - |
+      if [ ! -d "android-ndk-r27d" ]; then
+        curl -LO "https://dl.google.com/android/repository/android-ndk-r27d-linux.zip"
+        unzip android-ndk-r27d-linux.zip
+      fi
+    - export PATH="$PWD/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
     - mkdir bin
-    - mv src/seniorpw/target/release/senior bin/senior-linux-amd64-$PKG_VERSION
-    - mv src/seniorpw/target/release/senior-agent bin/senior-agent-linux-amd64-$PKG_VERSION
-    - ls -la bin/
+    - cd src/seniorpw/
+    - rustup target add $TARGETTRIPLES
+    - |
+      for TARGETTRIPLE in $TARGETTRIPLES; do
+        cargo build --release --target="$TARGETTRIPLE"
+        mv target/$TARGETTRIPLE/release/senior ../../bin/senior-$PKG_VERSION-$TARGETTRIPLE
+        mv target/$TARGETTRIPLE/release/senior-agent ../../bin/senior-agent-$PKG_VERSION-$TARGETTRIPLE
+      done
+    - ls -la ../../bin/
   artifacts:
     paths:
       - bin/
@@ -100,6 +112,7 @@ upload:
     - |
       for file in ./bin/*; do
         filename=$(basename "$file")
+        echo "Uploading $file to $UPLOAD_URL/$filename"
         curl --location --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
             --upload-file "$file" \
             "$UPLOAD_URL/$filename"
@@ -113,12 +126,21 @@ release:
     - *rust_code_rules
   script:
     - '[ "$CONTINUE_PIPELINE" != true ] && exit 0'
+    - export ASSETSLINKS=
+    - |
+      for TARGETTRIPLE in $TARGETTRIPLES; do
+        SENIOR_BIN="senior-$PKG_VERSION-$TARGETTRIPLE"
+        SENIOR_AGENT_BIN="senior-agent-$PKG_VERSION-$TARGETTRIPLE"
+        for ASSETFILE in "$SENIOR_BIN" "$SENIOR_AGENT_BIN"; do
+          export ASSETSLINKS="$ASSETSLINKS"' --assets-link {"name":"'"$ASSETFILE"'","url":"'"$UPLOAD_URL/$ASSETFILE"'"}'
+        done
+      done
+    - printf '%s\n' "$ASSETSLINKS"
     - |
       release-cli create \
       --name "$PKG_VERSION" \
-      --tag-name $PKG_VERSION \
-      --assets-link "{\"name\":\"senior-linux-amd64-$PKG_VERSION\",\"url\":\"$UPLOAD_URL/senior-linux-amd64-$PKG_VERSION\"}" \
-      --assets-link "{\"name\":\"senior-agent-linux-amd64-$PKG_VERSION\",\"url\":\"$UPLOAD_URL/senior-agent-linux-amd64-$PKG_VERSION\"}" \
+      --tag-name "$PKG_VERSION" \
+      $(printf "%s" "$ASSETSLINKS") \
       --assets-link "{\"name\":\"seniormenu-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/seniormenu?inline=false\"}" \
       --assets-link "{\"name\":\"senior-zsh-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.zsh?inline=false\"}" \
       --assets-link "{\"name\":\"senior-bash-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.bash?inline=false\"}"
