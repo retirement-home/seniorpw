@@ -1845,7 +1845,7 @@ fn get_identity_file_from_name_path(
     let senior_dir = store_dir.parent().unwrap().canonicalize()?;
     let canon_store = canon_name_path.strip_prefix(&senior_dir).or(Err(format!(
         "Path {} is outside of the senior directory {}!",
-        name_path.display(),
+        canon_name_path.display(),
         senior_dir.display()
     )))?;
     let canon_store = canon_store.iter().next().ok_or(format!(
@@ -1926,10 +1926,11 @@ impl Iterator for PasswordIter {
             if path.is_symlink() {
                 let identity_file =
                     get_identity_file_from_name_path(&self.store_dir, direntry.path())
-                        .unwrap_or_else(|_| {
+                        .unwrap_or_else(|e| {
                             panic!(
-                                "Cannot get identity file for {}!",
-                                direntry.path().display()
+                                "Cannot get identity file for {}!\n{}",
+                                direntry.path().display(),
+                                e,
                             )
                         });
                 self.identities
