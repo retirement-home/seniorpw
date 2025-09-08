@@ -6,7 +6,6 @@ A Password Manager Using [age](https://github.com/FiloSottile/age) for Encryptio
 
 ## Contents
 - [Features](#features)
-- [Comparison with Alternatives](#comparison-with-alternatives)
 - [Usage](#usage)
 - [Install](#install)
 - [Import From Another Password Manager](#import-from-another-password-manager)
