@@ -33,19 +33,19 @@ To do:
 - More import scripts
 
 ### Comparison with Alternatives
-| Name | Backend | Encrypted Identities | Agent | git | TOTP | Configless | Language |
-| - | - | - | - | - | - | - | - |
-| [pasejo](https://github.com/metio/pasejo) | age | ❌ | - | ✅ | ✅ | ❌ | Rust |
-| [psswd](https://github.com/Gogopex/psswd) | age | ❌ scrypt | ❌ | ❌ | ❌ | ✅ | Rust |
-| [Pa-rs E](https://gitlab.com/mchal_/parse) | - | - | - | - | ❌ | ❌ | Rust |
-| [privage](https://github.com/revelaction/privage) | age | yubikey | - | ✅ | ❌ | ✅ | Go |
-| [neopass](https://github.com/nwehr/neopass) | age | ✅ | ❌ | - | ❌ | ❌ | Go |
-| [pa](https://passwordass.org/) | age | ✅ | ❌ | ✅ | ❌ | ✅ | POSIX Shell |
-| [passage](https://github.com/FiloSottile/passage) | age | ✅ | ❌ | ✅ | [✅](https://github.com/tadfisher/pass-otp/pull/178) | ✅ | Bash |
-| [kbs2](https://github.com/woodruffw/kbs2) | age | ✅ | ✅ | ❌ | ❌ | ❌ | Rust |
-| [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ❌ | ✅ | Go |
-| [pass](https://www.passwordstore.org/) | gpg | ✅ | ✅ gpg-agent | ✅ | [✅](https://github.com/tadfisher/pass-otp) | ✅ | Bash |
-| [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ✅ | ✅ | ✅ | Rust |
+| Name | Backend | Encrypted Identities | Agent | Agent Timeout | git | Key-Value Pairs | TOTP | Configless | Language |
+| - | - | - | - | - | - | - | - | - | - |
+| [pasejo](https://github.com/metio/pasejo) | age | ❌ | - | - | ✅ | ❌ | ✅ | ❌ | Rust |
+| [psswd](https://github.com/Gogopex/psswd) | age | ❌ scrypt | ❌ | - | ❌ | ❌ | ❌ | ✅ | Rust |
+| [Pa-rs E](https://gitlab.com/mchal_/parse) | - | - | - | - | - | ❌ | ❌ | ❌ | Rust |
+| [privage](https://github.com/revelaction/privage) | age | yubikey | - | - | ✅ | ❌ | ❌ | ✅ | Go |
+| [neopass](https://github.com/nwehr/neopass) | age | ✅ | ❌ | - | - | ❌ | ❌ | ❌ | Go |
+| [pa](https://passwordass.org/) | age | ✅ | ❌ | - | ✅ | ❌ | ❌ | ✅ | POSIX Shell |
+| [passage](https://github.com/FiloSottile/passage) | age | ✅ | ❌ | - | ✅ | ❌ | [✅](https://github.com/tadfisher/pass-otp/pull/178) | ✅ | Bash |
+| [kbs2](https://github.com/woodruffw/kbs2) | age | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | Rust |
+| [pass](https://www.passwordstore.org/) | gpg | ✅ | ✅ gpg-agent | ✅ gpg-agent | ✅ | ❌ | [✅](https://github.com/tadfisher/pass-otp) | ✅ | Bash |
+| [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Go |
+| [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Rust |
 
 ## Usage
 ### Create a New Store
