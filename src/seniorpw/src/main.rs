@@ -1240,9 +1240,13 @@ fn show(
                             .split_once("secret=")
                             .ok_or("Cannot find secret in otpauth string!")?
                             .1;
-                        let secret = secret.split(&['=', '&']).next().unwrap_or(value);
+                        let secret = secret
+                            .split(&['=', '&'])
+                            .next()
+                            .unwrap_or(value)
+                            .to_uppercase();
                         _otp = thotp::otp(
-                            &base32::decode(base32::Alphabet::Rfc4648 { padding: false }, secret)
+                            &base32::decode(base32::Alphabet::Rfc4648 { padding: false }, &secret)
                                 .unwrap(),
                             SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / 30,
                         )?;
