@@ -1927,7 +1927,7 @@ impl Iterator for PasswordIter {
                 .next()?
                 .expect("Cannot unwrap DirEntry for password!");
             let path = direntry.clone().into_path();
-            if path.is_symlink() {
+            if path.is_symlink() && path.is_dir() {
                 let identity_file =
                     get_identity_file_from_name_path(&self.store_dir, direntry.path())
                         .unwrap_or_else(|e| {
