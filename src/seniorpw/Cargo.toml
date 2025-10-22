@@ -1,7 +1,7 @@
 [package]
 name = "senior"
 version = "0.8.1"
-edition = "2021"
+edition = "2024"
 default-run = "senior"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -18,7 +18,7 @@ clap = { version = "4.5", features = ["derive"] }
 grep = "0.3"
 interprocess = "2.2"
 rpassword = "7.3"
-sysinfo = "0.37"
+sysinfo = "0.36"
 tempdir = "0.3"
 termcolor = "1.4"
 thotp = "0.1"

@@ -3,7 +3,7 @@ use std::env;
 use std::path::PathBuf;
 
 #[link(name = "c")]
-extern "C" {
+unsafe extern "C" {
     pub fn geteuid() -> u32;
 }
 
