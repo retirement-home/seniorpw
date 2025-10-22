@@ -109,7 +109,7 @@ fn agent_get_passphrase(identity_file: &Path) -> Result<Option<String>, Box<dyn 
             if e.kind() == io::ErrorKind::ConnectionRefused
                 || e.kind() == io::ErrorKind::NotFound =>
         {
-            return Ok(None)
+            return Ok(None);
         }
         x => x?,
     };
@@ -153,7 +153,10 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
                     // Remove zombie socket file
                     let socket_path = PathBuf::from(&socket_print_name);
                     if socket_path.exists() {
-                        eprintln!("senior-agent is not running, but {} exists. Deleting zombie socket file...", socket_path.display());
+                        eprintln!(
+                            "senior-agent is not running, but {} exists. Deleting zombie socket file...",
+                            socket_path.display()
+                        );
                         std::fs::remove_file(&socket_path)?;
                     }
                     let child = match Command::new("senior-agent")
@@ -355,7 +358,9 @@ fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String,
             if let Ok(keyfile_content) = std::fs::read_to_string(keyfile) {
                 if let Ok(age_identity) = age_identity_from_keyfile_content(&keyfile_content) {
                     // unencrypted age identity file
-                    println!("The supplied age identity is unencrypted. It is recommended to encrypt it with a passphrase.");
+                    println!(
+                        "The supplied age identity is unencrypted. It is recommended to encrypt it with a passphrase."
+                    );
                     let passphrase = ask_passphrase_twice()?;
                     let use_passphrase = !passphrase.is_empty();
                     let identity_file = store_dir.join(if use_passphrase {
@@ -397,7 +402,9 @@ fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String,
                             fs::copy(keyfile, store_dir.join(".identity.pass.ssh"))?;
                             break Ok(String::from_utf8(keygen_command.stdout)?);
                         } else {
-                            eprintln!("Could not produce public key! Is the passphrase correct? Please try again.");
+                            eprintln!(
+                                "Could not produce public key! Is the passphrase correct? Please try again."
+                            );
                         }
                     },
                     ssh::Identity::Unencrypted(_) => {
@@ -407,7 +414,9 @@ fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String,
                         gen_pubkey.status.exit_ok()?;
                         // remove newline
                         gen_pubkey.stdout.pop();
-                        println!("Supplied ssh key is unencrypted. It is recommended to encrypt it with a passphrase.");
+                        println!(
+                            "Supplied ssh key is unencrypted. It is recommended to encrypt it with a passphrase."
+                        );
                         let passphrase = ask_passphrase_twice()?;
                         let use_passphrase = !passphrase.is_empty();
                         let identity_file = store_dir.join(if use_passphrase {
@@ -615,7 +624,9 @@ fn git_clone(
             }
         }
 
-        println!("Tell an owner of the store to add you to the recipients! For this they should run the following command:");
+        println!(
+            "Tell an owner of the store to add you to the recipients! For this they should run the following command:"
+        );
         println!(
             "{}",
             format_cmd(&[
@@ -746,7 +757,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
                         identity_file.display(),
                         k
                     )
-                    .into())
+                    .into());
                 }
             };
             identities.push(Box::new(ssh::Identity::from(identity)) as Box<dyn age::Identity>);
@@ -1670,7 +1681,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
                         identity_file.display(),
                         k
                     )
-                    .into())
+                    .into());
                 }
             };
             let new_passphrase = ask_passphrase_twice()?;
@@ -1814,7 +1825,9 @@ fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn E
     loop {
         // check without git fetch
         if git_remote_is_ahead(store_dir) {
-            eprintln!("\nWARNING! The remote branch is ahead of your local branch! Reencrypting the entire store will almost certainly lead to merge conflicts!");
+            eprintln!(
+                "\nWARNING! The remote branch is ahead of your local branch! Reencrypting the entire store will almost certainly lead to merge conflicts!"
+            );
             eprintln!("It is highly advised to do `{senior_git_pull_cmd_str}` first!");
             if continue_anyway()? {
                 return Ok(());
@@ -1826,7 +1839,9 @@ fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn E
         // Safe on first sight? git fetch to be sure.
         } else if !git_fetch(store_dir) {
             // Could not git fetch. Probably no internet connection.
-            eprintln!("\nWARNING! Cannot `git fetch` right now. Reencrypting the entire store can lead to merge conflicts!");
+            eprintln!(
+                "\nWARNING! Cannot `git fetch` right now. Reencrypting the entire store can lead to merge conflicts!"
+            );
             eprintln!("It is highly advised to do `{senior_git_pull_cmd_str}` first!");
             if continue_anyway()? {
                 return Ok(());

@@ -1,4 +1,4 @@
-use interprocess::local_socket::{self, prelude::*, GenericFilePath, GenericNamespaced};
+use interprocess::local_socket::{self, GenericFilePath, GenericNamespaced, prelude::*};
 use std::env;
 use std::path::PathBuf;
 

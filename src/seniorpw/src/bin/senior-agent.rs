@@ -2,9 +2,9 @@ use senior::get_socket_name;
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::{self, prelude::*, BufReader};
+use std::io::{self, BufReader, prelude::*};
 
-use interprocess::local_socket::{prelude::*, ListenerOptions, Stream};
+use interprocess::local_socket::{ListenerOptions, Stream, prelude::*};
 
 fn handle_error(conn: io::Result<Stream>) -> Option<Stream> {
     match conn {
@@ -23,10 +23,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let listener = match opts.create_sync() {
         Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
             eprintln!(
-                 "\
+                "\
     Error: Could not start server because the socket file is occupied. Please check if {print_name} is in \
     use by another process and try again."
-             );
+            );
             return Err(e.into());
         }
         x => x?,

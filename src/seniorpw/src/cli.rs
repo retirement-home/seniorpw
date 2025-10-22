@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 
-use clap::{builder::ValueHint, Parser, Subcommand};
+use clap::{Parser, Subcommand, builder::ValueHint};
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
