@@ -51,9 +51,10 @@ fn get_display_server() -> DisplayServer {
     let wsl_file = Path::new("/proc/version");
     if wsl_file.is_file()
         && let Ok(proc_version) = fs::read_to_string(wsl_file)
-            && proc_version.to_lowercase().contains("microsoft") {
-                return DisplayServer::Wsl;
-            }
+        && proc_version.to_lowercase().contains("microsoft")
+    {
+        return DisplayServer::Wsl;
+    }
     // Wayland
     if env::var_os("WAYLAND_DISPLAY").is_some() {
         return DisplayServer::Wayland;
@@ -78,9 +79,10 @@ fn get_display_server() -> DisplayServer {
     }
     // Termux
     if let Some(v) = env::var_os("PREFIX")
-        && v.into_string().unwrap().contains("termux") {
-            return DisplayServer::Termux;
-        }
+        && v.into_string().unwrap().contains("termux")
+    {
+        return DisplayServer::Termux;
+    }
     // Default: Windows
     DisplayServer::Windows
 }
@@ -353,30 +355,31 @@ fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String,
         }
         Some(keyfile) => {
             if let Ok(keyfile_content) = std::fs::read_to_string(keyfile)
-                && let Ok(age_identity) = age_identity_from_keyfile_content(&keyfile_content) {
-                    // unencrypted age identity file
-                    println!(
-                        "The supplied age identity is unencrypted. It is recommended to encrypt it with a passphrase."
-                    );
-                    let passphrase = ask_passphrase_twice()?;
-                    let use_passphrase = !passphrase.is_empty();
-                    let identity_file = store_dir.join(if use_passphrase {
-                        ".identity.age"
-                    } else {
-                        ".identity.txt"
-                    });
-                    fs::create_dir_all(store_dir)?;
-                    if use_passphrase {
-                        let encryptor =
-                            age::Encryptor::with_user_passphrase(SecretString::from(passphrase));
-                        let mut write_to = encryptor.wrap_output(File::create(&identity_file)?)?;
-                        write_to.write_all(keyfile_content.as_bytes())?;
-                        write_to.finish()?;
-                    } else {
-                        fs::copy(keyfile, identity_file)?;
-                    }
-                    return Ok(age_identity.to_public().to_string());
+                && let Ok(age_identity) = age_identity_from_keyfile_content(&keyfile_content)
+            {
+                // unencrypted age identity file
+                println!(
+                    "The supplied age identity is unencrypted. It is recommended to encrypt it with a passphrase."
+                );
+                let passphrase = ask_passphrase_twice()?;
+                let use_passphrase = !passphrase.is_empty();
+                let identity_file = store_dir.join(if use_passphrase {
+                    ".identity.age"
+                } else {
+                    ".identity.txt"
+                });
+                fs::create_dir_all(store_dir)?;
+                if use_passphrase {
+                    let encryptor =
+                        age::Encryptor::with_user_passphrase(SecretString::from(passphrase));
+                    let mut write_to = encryptor.wrap_output(File::create(&identity_file)?)?;
+                    write_to.write_all(keyfile_content.as_bytes())?;
+                    write_to.finish()?;
+                } else {
+                    fs::copy(keyfile, identity_file)?;
                 }
+                return Ok(age_identity.to_public().to_string());
+            }
             // three possibilities left:
             // 1. encrypted ssh key
             // 2. unencrypted ssh key
@@ -509,9 +512,10 @@ fn init(
         Err(e) => {
             // cleanup
             if store_dir.is_dir()
-                && let Err(e) = fs::remove_dir_all(store_dir) {
-                    eprintln!("Error cleaning up {}! {}", store_dir.display(), e);
-                }
+                && let Err(e) = fs::remove_dir_all(store_dir)
+            {
+                eprintln!("Error cleaning up {}! {}", store_dir.display(), e);
+            }
             Err(e)
         }
         Ok(()) => Ok(()),
@@ -610,13 +614,13 @@ fn git_clone(
         if identity.is_some()
             && let Some(filepos) =
                 find_pubkey_in_recipients(&store_dir.join(".recipients"), &pubkey)
-            {
-                println!(
-                    "The public key of the supplied identity file is already a recipient in {filepos}.",
-                );
-                println!("You should be able to decrypt passwords now.");
-                return Ok(());
-            }
+        {
+            println!(
+                "The public key of the supplied identity file is already a recipient in {filepos}.",
+            );
+            println!("You should be able to decrypt passwords now.");
+            return Ok(());
+        }
 
         println!(
             "Tell an owner of the store to add you to the recipients! For this they should run the following command:"
@@ -640,13 +644,14 @@ fn git_clone(
         Err(e) => {
             // cleanup
             if store_dir.is_dir()
-                && let Err(e) = fs::remove_dir_all(store_dir) {
-                    eprintln!(
-                        "Error encountered while cleaning up {}! {}",
-                        store_dir.display(),
-                        e
-                    );
-                }
+                && let Err(e) = fs::remove_dir_all(store_dir)
+            {
+                eprintln!(
+                    "Error encountered while cleaning up {}! {}",
+                    store_dir.display(),
+                    e
+                );
+            }
             Err(e)
         }
         Ok(()) => Ok(()),
@@ -811,9 +816,10 @@ fn edit_file_with_editor(path: &Path) -> Result<String, Box<dyn Error>> {
     }
     for editor in ["nvim", "vim", "emacs", "nano", "vi"] {
         if let Some(e) = editors.first()
-            && editor == e {
-                continue;
-            }
+            && editor == e
+        {
+            continue;
+        }
         editors.push(editor.to_string());
     }
     let mut editor_args = HashMap::new();
@@ -2090,15 +2096,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // default store for `senior clone`
     if cli.store.is_none()
-        && let CliCommand::GitClone { ref address, .. } = cli.command {
-            cli.store = Some(
-                address
-                    .rsplit('/')
-                    .map(|name_dot_git| OsString::from(&name_dot_git[..(name_dot_git.len() - 4)]))
-                    .next()
-                    .unwrap(),
-            );
-        }
+        && let CliCommand::GitClone { ref address, .. } = cli.command
+    {
+        cli.store = Some(
+            address
+                .rsplit('/')
+                .map(|name_dot_git| OsString::from(&name_dot_git[..(name_dot_git.len() - 4)]))
+                .next()
+                .unwrap(),
+        );
+    }
     // default store and corresponding directory
     // the store is either the only directory in the senior directory, or "main"
     let store_dir = senior_dir.join(cli.store.get_or_insert_with(|| {
