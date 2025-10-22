@@ -8,8 +8,8 @@ unsafe extern "C" {
 }
 
 pub fn get_socket_name() -> (String, local_socket::Name<'static>) {
-    if let Some(runtime_dir) = env::var_os("XDG_RUNTIME_DIR") {
-        if GenericFilePath::is_supported() {
+    if let Some(runtime_dir) = env::var_os("XDG_RUNTIME_DIR")
+        && GenericFilePath::is_supported() {
             let mut path = PathBuf::from(runtime_dir);
             if path.is_dir() {
                 path.push("senior-agent.sock");
@@ -17,7 +17,6 @@ pub fn get_socket_name() -> (String, local_socket::Name<'static>) {
                 return (path.clone(), path.to_fs_name::<GenericFilePath>().unwrap());
             }
         }
-    }
 
     let uid = unsafe { geteuid() };
     let name = format!("senior-agent-{uid}.sock");
