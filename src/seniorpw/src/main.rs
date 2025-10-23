@@ -22,7 +22,7 @@ use atty::Stream;
 use clap::Parser;
 use interprocess::local_socket::{self, prelude::*};
 use sysinfo::System;
-use tempdir::TempDir;
+use tempfile::TempDir;
 use walkdir::WalkDir;
 
 use cli::{Cli, CliCommand};
@@ -195,6 +195,27 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
     }
     if let Err(e) = agent_set_passphrase_helper(identity_file, passphrase) {
         eprintln!("Could not save passphrase to senior-agent: {e}");
+    }
+}
+
+fn agent_delete_passphrase(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
+    let mut buffer = String::new();
+    let conn = match local_socket::Stream::connect(get_socket_name().1) {
+        Err(e)
+            if e.kind() == io::ErrorKind::ConnectionRefused
+                || e.kind() == io::ErrorKind::NotFound =>
+        {
+            return Ok(false);
+        }
+        x => x?,
+    };
+    let mut conn = BufReader::new(conn);
+    conn.get_mut()
+        .write_all(format!("d {}\n", agent_key_from_identity_file(identity_file)?).as_bytes())?;
+    conn.read_line(&mut buffer)?;
+    match &buffer[0..1] {
+        "o" => Ok(true),
+        _ => Ok(false),
     }
 }
 
@@ -1003,9 +1024,9 @@ fn check_for_git(canon_store_dir: &Path) -> bool {
 fn tempdir() -> std::io::Result<TempDir> {
     let shm = Path::new("/dev/shm/");
     if shm.is_dir() {
-        TempDir::new_in(shm, "senior")
+        TempDir::with_prefix_in("senior-", shm)
     } else {
-        TempDir::new("senior")
+        TempDir::with_prefix("senior-")
     }
 }
 
@@ -1589,6 +1610,30 @@ fn add_recipient(
 }
 
 fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
+    fn create_identity_backup(
+        identity_file: &Path,
+        clear_senior_agent: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        let tmp_dir = tempdir()?.keep();
+        let backup_identity_file = tmp_dir.join(identity_file.file_name().unwrap());
+        fs::copy(identity_file, &backup_identity_file)?;
+        println!(
+            "Created backup of identity. Run `{}` to recover.",
+            format_cmd(&[
+                "cp",
+                backup_identity_file.to_str().unwrap(),
+                identity_file.to_str().unwrap()
+            ])
+        );
+        // clear the passphrase from senior agent. Otherwise the user might try out senior show and
+        // think that the new identity file works even though he is only getting the cache from the
+        // agent.
+        if clear_senior_agent {
+            let _ = agent_delete_passphrase(identity_file)?;
+        }
+        Ok(())
+    }
+
     let store_dir = identity_file.parent().unwrap();
     let extension = identity_file.extension().unwrap().to_str().unwrap();
     match extension {
@@ -1607,6 +1652,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
             let mut write_to = encryptor.wrap_output(File::create(new_identity_file)?)?;
             write_to.write_all(&keyfile_content)?;
             write_to.finish()?;
+            create_identity_backup(identity_file, false)?;
             fs::remove_file(identity_file)?;
         }
         "age" => loop {
@@ -1640,6 +1686,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
             let new_identity_file = store_dir.join(new_identity_filename);
             if passphrase.is_empty() {
                 File::create(new_identity_file)?.write_all(&keyfile_content)?;
+                create_identity_backup(identity_file, true)?;
                 fs::remove_file(identity_file)?;
             } else {
                 let tmp_dir = tempdir()?;
@@ -1649,6 +1696,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
                 let mut write_to = encryptor.wrap_output(File::create(&tmp_identity_file)?)?;
                 write_to.write_all(&keyfile_content)?;
                 write_to.finish()?;
+                create_identity_backup(identity_file, true)?;
                 fs::copy(&tmp_identity_file, new_identity_file)?;
             }
             break;
@@ -1687,6 +1735,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
                 println!("Empty passphrase. No changes.");
                 return Ok(());
             }
+            create_identity_backup(identity_file, !old_passphrase.is_empty())?;
             Command::new("ssh-keygen")
                 .args([
                     "-p",
@@ -1713,7 +1762,7 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// returns if the fetch was a success
+// returns whether the fetch was a success
 fn git_fetch(store_dir: &Path) -> bool {
     eprintln!("git fetch...");
 

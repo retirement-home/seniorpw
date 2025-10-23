@@ -84,6 +84,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let pass = buffer[(separator_index + 3)..].to_owned();
                 passphrases.insert(key, pass);
             }
+            "d" => {
+                // delete
+                let key = &buffer[2..];
+                match passphrases.remove(key) {
+                    Some(_) => writeln!(&mut conn, "o: Removed {}", &key)?,
+                    None => writeln!(&mut conn, "e: Key {key} is not present!")?,
+                }
+            }
             _ => {
                 writeln!(&mut conn, "e: Command not implemented!")?;
                 continue;
