@@ -209,7 +209,7 @@ senior cat [dirname] | grep -C 5 -i -n <REGEX PATTERN>
 Simply use the provided [PKGBUILD](PKGBUILD).
 ```sh
 # Download the PKGBUILD into an empty directory
-curl -O "https://gitlab.com/retirement-home/senior/-/raw/main/PKGBUILD"
+curl -LO "https://gitlab.com/retirement-home/senior/-/raw/main/PKGBUILD"
 # Install the package with all its dependencies
 makepkg -sic
 ```
