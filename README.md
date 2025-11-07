@@ -85,12 +85,12 @@ senior rm example2.com
 ```
 `senior show` has the option `-k` or `--key` to only print the value of a `key: value` pair.
 The special key `otp` creates the one-time password from the otpauth-string.
-```sh
+```shell
 $ senior show example.com
 mysecretpassword
 user: myusername
 otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example
-# use `-c` or `--clip` to also add it to the clipboard
+$ # use `-c` or `--clip` to also add it to the clipboard
 $ senior show -c -k user example.com
 myusername
 $ senior show -k otp example.com
@@ -133,8 +133,8 @@ $ senior -s work show
 ```
 Notice the symlink `main/friends -> ../friends`. This makes the two commands
 ```sh
-$ senior -s friends show example.com
-$ senior show friends/example.com
+senior -s friends show example.com
+senior show friends/example.com
 ```
 equivalent.
 seniorpw recognises that `main/friends/example.com` is actually at `friends/example.com` and therefore uses
@@ -145,9 +145,9 @@ This is very practical for [seniormenu](#seniormenu), as it only looks inside th
 If only one store exists then this is the default store. Otherwise, `main` is the default store.
 
 You can use the store argument multiple times or use globbing to run the same command for multiple stores.
-```shell
-$ senior -s '*' git pull
-$ senior -s main -s work add-recipient ...
+```sh
+senior -s '*' git pull
+senior -s main -s work add-recipient ...
 ```
 
 ### seniormenu
