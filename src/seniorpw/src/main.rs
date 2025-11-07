@@ -1880,7 +1880,7 @@ fn warn_before_reencryption(
             eprintln!(
                 "\nWARNING! The remote branch is ahead of your local branch! Reencrypting the entire store will almost certainly lead to merge conflicts!"
             );
-            eprintln!("It is highly advised to do `{senior_git_pull_cmd_str}` first!");
+            eprintln!("It is highly advised to run `{senior_git_pull_cmd_str}` first!");
             if continue_anyway()? {
                 return Ok(());
             } else {
@@ -1894,7 +1894,7 @@ fn warn_before_reencryption(
             eprintln!(
                 "\nWARNING! Cannot `git fetch` right now. Reencrypting the entire store can lead to merge conflicts!"
             );
-            eprintln!("It is highly advised to do `{senior_git_pull_cmd_str}` first!");
+            eprintln!("It is highly advised to run `{senior_git_pull_cmd_str}` first!");
             if continue_anyway()? {
                 return Ok(());
             } else {
