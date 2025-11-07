@@ -9,7 +9,7 @@ pub struct Cli {
     /// Alias for the store; default: "main", or the only existing one,
     ///                      or for `senior clone` the name of the repository
     #[arg(short, long)]
-    pub store: Option<OsString>,
+    pub store: Vec<OsString>,
 
     #[command(subcommand)]
     pub command: CliCommand,

@@ -335,7 +335,7 @@ fn new_passphrase_identity(passphrase: &str) -> age::scrypt::Identity {
 }
 
 // returns the public key
-fn setup_identity(store_dir: &Path, identity: &Option<String>) -> Result<String, Box<dyn Error>> {
+fn setup_identity(store_dir: &Path, identity: Option<&String>) -> Result<String, Box<dyn Error>> {
     match identity {
         None => {
             let passphrase = ask_passphrase_twice()?;
@@ -502,18 +502,19 @@ fn user_at_host() -> String {
 
 fn init(
     store_dir: &Path,
-    identity: Option<String>,
-    recipient_alias: Option<String>,
+    identity: Option<&String>,
+    recipient_alias: Option<&String>,
 ) -> Result<(), Box<dyn Error>> {
     fn init_helper(
         store_dir: &Path,
-        identity: Option<String>,
-        recipient_alias: Option<String>,
+        identity: Option<&String>,
+        recipient_alias: Option<&String>,
     ) -> Result<(), Box<dyn Error>> {
         // set up default values
-        let recipient_alias = recipient_alias.unwrap_or_else(user_at_host);
+        let recipient_alias: String =
+            recipient_alias.map_or_else(|| user_at_host(), |r| String::from(r));
 
-        let pubkey = setup_identity(store_dir, &identity)?;
+        let pubkey = setup_identity(store_dir, identity)?;
 
         let recipients_dir = store_dir.join(".recipients");
         let recipients_main = recipients_dir.join("main.txt");
@@ -617,20 +618,20 @@ fn format_cmd(cmd: &[&str]) -> String {
 
 fn git_clone(
     store_dir: &Path,
-    identity: Option<String>,
-    address: String,
+    identity: Option<&String>,
+    address: &String,
 ) -> Result<(), Box<dyn Error>> {
     fn git_clone_helper(
         store_dir: &Path,
-        identity: Option<String>,
-        address: String,
+        identity: Option<&String>,
+        address: &String,
     ) -> Result<(), Box<dyn Error>> {
         Command::new("git")
             .args(["clone", &address])
             .arg(store_dir)
             .status()?
             .exit_ok()?;
-        let pubkey = setup_identity(store_dir, &identity)?;
+        let pubkey = setup_identity(store_dir, identity)?;
 
         if identity.is_some()
             && let Some(filepos) =
@@ -1047,7 +1048,7 @@ fn git_commit(store_dir: &Path, message: &str) -> Result<(), Box<dyn Error>> {
 // edit store_dir/name.age
 // decrypt via identity_file
 // encrypt via identity_file.parent()/.recipients/
-fn edit(identity_file: &Path, store_dir: &Path, name: String) -> Result<(), Box<dyn Error>> {
+fn edit(identity_file: &Path, store_dir: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let canon_store_dir = identity_file.parent().unwrap();
     let agefile = canonicalise(&store_dir.join(format!("{name}.age")))?;
 
@@ -1158,8 +1159,8 @@ fn show(
     identity_file: &Path,
     store_dir: &Path,
     clip: bool,
-    key: Option<String>,
-    name: String,
+    key: Option<&String>,
+    name: &str,
 ) -> Result<(), Box<dyn Error>> {
     fn first_line(s: &str) -> &str {
         s.split('\n').next().unwrap()
@@ -1370,8 +1371,8 @@ fn removedirs(path: &Path) -> io::Result<()> {
 fn move_name(
     identity_file: &Path,
     store_dir: &Path,
-    old_name: String,
-    new_name: String,
+    old_name: &str,
+    new_name: &str,
 ) -> Result<(), Box<dyn Error>> {
     let canon_store_dir = identity_file.parent().unwrap();
     let mut old_path = store_dir.join(&old_name);
@@ -1449,7 +1450,7 @@ fn remove(
     identity_file: &Path,
     store_dir: &Path,
     recursive: bool,
-    name: String,
+    name: &str,
 ) -> Result<(), Box<dyn Error>> {
     let canon_store_dir = identity_file.parent().unwrap();
     let mut path = store_dir.join(&name);
@@ -1563,8 +1564,8 @@ fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
 
 fn add_recipient(
     identity_file: &Path,
-    public_key: String,
-    alias: String,
+    public_key: &str,
+    alias: &str,
 ) -> Result<(), Box<dyn Error>> {
     if let Err(e) = recipient_from_str(&public_key) {
         return Err(
@@ -1839,7 +1840,10 @@ fn git_remote_is_ahead(store_dir: &Path) -> bool {
 }
 
 // Before reencrypting the entire store, check for possible merge conflicts
-fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn Error>> {
+fn warn_before_reencryption(
+    store_dir: &Path,
+    default_store_name: &OsStr,
+) -> Result<(), Box<dyn Error>> {
     fn continue_anyway() -> Result<bool, Box<dyn Error>> {
         loop {
             eprint!("Do you want to continue anyway? [y/N]: ");
@@ -1862,7 +1866,8 @@ fn warn_before_reencryption(store_dir: &Path, cli: &Cli) -> Result<(), Box<dyn E
     }
 
     let mut senior_git_pull_cmd_str = String::from("senior");
-    if let Some(store_name) = cli.store.as_ref() {
+    let store_name = store_dir.file_name().unwrap();
+    if store_name != default_store_name {
         senior_git_pull_cmd_str.push_str(" -s ");
         senior_git_pull_cmd_str.push_str(&format_arg(store_name.to_str().unwrap()));
     }
@@ -2136,6 +2141,23 @@ fn home() -> PathBuf {
     }))
 }
 
+fn get_default_store_name(senior_dir: &Path) -> OsString {
+    if senior_dir.is_dir() {
+        let mut entries = senior_dir
+            .read_dir()
+            .expect("Cannot read senior directory!")
+            .filter(|entry| entry.as_ref().unwrap().file_type().unwrap().is_dir());
+        match (entries.next(), entries.next()) {
+            (Some(entry), None) => entry
+                .expect("Cannot open entry of senior directory!")
+                .file_name(),
+            _ => OsString::from("main"),
+        }
+    } else {
+        OsString::from("main")
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let mut cli = Cli::parse();
 
@@ -2143,142 +2165,156 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map_or_else(|| home().join(".local/share/"), PathBuf::from)
         .join("senior/");
 
-    // default store for `senior clone`
-    if cli.store.is_none()
-        && let CliCommand::GitClone { ref address, .. } = cli.command
-    {
-        cli.store = Some(
-            address
-                .rsplit('/')
-                .map(|name_dot_git| OsString::from(&name_dot_git[..(name_dot_git.len() - 4)]))
-                .next()
-                .unwrap(),
+    // default store
+    // the store is either the only directory in the senior directory, or "main"
+    // or for `senior clone` it is the name of the repository
+    if cli.store.is_empty() {
+        cli.store.push(
+            if let CliCommand::GitClone { ref address, .. } = cli.command {
+                address
+                    .rsplit('/')
+                    .map(|name_dot_git| OsString::from(&name_dot_git[..(name_dot_git.len() - 4)]))
+                    .next()
+                    .unwrap()
+            } else {
+                get_default_store_name(&senior_dir)
+            },
         );
     }
-    // default store and corresponding directory
-    // the store is either the only directory in the senior directory, or "main"
-    let store_dir = senior_dir.join(cli.store.get_or_insert_with(|| {
-        if senior_dir.is_dir() {
-            let mut entries = senior_dir
-                .read_dir()
-                .expect("Cannot read senior directory!")
-                .filter(|entry| entry.as_ref().unwrap().file_type().unwrap().is_dir());
-            match (entries.next(), entries.next()) {
-                (Some(entry), None) => entry
-                    .expect("Cannot open entry of senior directory!")
-                    .file_name(),
-                _ => OsString::from("main"),
-            }
-        } else {
-            OsString::from("main")
-        }
-    }));
 
-    // check existence / non-existence of store
-    match cli.command {
-        // print-dir: not relevant
-        CliCommand::PrintDir => {}
-        // init/clone: make sure the store does not exist already
-        CliCommand::Init { .. } | CliCommand::GitClone { .. } => {
-            if store_dir.exists() {
-                return Err(format!(
-                    "Store {} exists already! Use `-s` to specify another store.",
-                    store_dir.display()
-                )
-                .into());
+    for (store_i, store) in cli.store.iter().enumerate() {
+        let store_dir = senior_dir.join(store);
+        if cli.store.len() > 1 {
+            let mut ppb = grep::printer::PathPrinterBuilder::new();
+            ppb.color_specs(grep::printer::ColorSpecs::new(
+                &grep::printer::default_color_specs(),
+            ));
+            let mut path_printer = ppb.build(termcolor::StandardStream::stdout(
+                termcolor::ColorChoice::Auto,
+            ));
+            path_printer.write(&store_dir)?;
+        }
+
+        // check existence / non-existence of store
+        match cli.command {
+            // print-dir: not relevant
+            CliCommand::PrintDir => {}
+            // init/clone: make sure the store does not exist already
+            CliCommand::Init { .. } | CliCommand::GitClone { .. } => {
+                if store_dir.exists() {
+                    return Err(format!(
+                        "Store {} exists already! Use `-s` to specify another store.",
+                        store_dir.display()
+                    )
+                    .into());
+                }
+            }
+            // rest: make sure the store exists
+            _ => {
+                if !store_dir.exists() {
+                    return Err(format!(
+                        "Store {} does not exist! Use `-s` to specify another store.",
+                        store_dir.display()
+                    )
+                    .into());
+                }
             }
         }
-        // rest: make sure the store exists
-        _ => {
-            if !store_dir.exists() {
-                return Err(format!(
-                    "Store {} does not exist! Use `-s` to specify another store.",
-                    store_dir.display()
-                )
-                .into());
+
+        // show/edit: get the correct identity file (respecting symbolic links)
+        let canonicalised_identity_file = match &cli.command {
+            CliCommand::Show { name, .. }
+            | CliCommand::Edit { name }
+            | CliCommand::Rm { name, .. } => get_identity_file_of_correct_store(&store_dir, name)?,
+            CliCommand::Mv { old_name, new_name } => {
+                let old_canonicalised_identity_file =
+                    get_identity_file_of_correct_store(&store_dir, old_name)?;
+                let new_canonicalised_identity_file =
+                    get_identity_file_of_correct_store(&store_dir, new_name)?;
+                if old_canonicalised_identity_file == new_canonicalised_identity_file {
+                    old_canonicalised_identity_file
+                } else {
+                    return Err(format!(
+                        "{old_name} and {new_name} are not part of the same store!"
+                    )
+                    .into());
+                }
             }
+            CliCommand::AddRecipient { .. }
+            | CliCommand::Reencrypt
+            | CliCommand::ChangePassphrase
+            | CliCommand::Unlock { .. } => get_identity_file_of_correct_store(&store_dir, "")?,
+            _ => PathBuf::new(),
+        };
+
+        match cli.command {
+            CliCommand::AddRecipient { .. } | CliCommand::Reencrypt => {
+                warn_before_reencryption(&store_dir, &get_default_store_name(&senior_dir))?
+            }
+            _ => {}
+        }
+
+        match cli.command {
+            CliCommand::Init {
+                ref identity,
+                ref recipient_alias,
+            } => init(&store_dir, identity.as_ref(), recipient_alias.as_ref())?,
+            CliCommand::GitClone {
+                ref identity,
+                ref address,
+            } => git_clone(&store_dir, identity.as_ref(), address)?,
+            CliCommand::Edit { ref name } => edit(&canonicalised_identity_file, &store_dir, name)?,
+            CliCommand::Show {
+                clip,
+                ref key,
+                ref name,
+            } => show(
+                &canonicalised_identity_file,
+                &store_dir,
+                clip,
+                key.as_ref(),
+                name,
+            )?,
+            CliCommand::Mv {
+                ref old_name,
+                ref new_name,
+            } => move_name(&canonicalised_identity_file, &store_dir, old_name, new_name)?,
+            CliCommand::Rm {
+                recursive,
+                ref name,
+            } => remove(&canonicalised_identity_file, &store_dir, recursive, name)?,
+            CliCommand::PrintDir => {
+                println!("{}", store_dir.display());
+            }
+            CliCommand::Git { ref args } => {
+                Command::new("git")
+                    .arg("-C")
+                    .arg(store_dir)
+                    .args(args)
+                    .status()?
+                    .exit_ok()?;
+            }
+            CliCommand::AddRecipient {
+                ref public_key,
+                ref alias,
+            } => add_recipient(&canonicalised_identity_file, public_key, alias)?,
+            CliCommand::Reencrypt => {
+                if reencrypt(&canonicalised_identity_file)? {
+                    git_commit(&store_dir, "Reencrypted store")?;
+                }
+            }
+            CliCommand::ChangePassphrase => change_passphrase(&canonicalised_identity_file)?,
+            CliCommand::Unlock { check } => unlock(&canonicalised_identity_file, check)?,
+            CliCommand::Grep {
+                ref pattern_or_cmd,
+                ref args,
+            } => grep_cmd(&store_dir, pattern_or_cmd, args)?,
+            CliCommand::Cat { ref dirname } => cat(&store_dir, dirname)?,
+        }
+
+        if store_i != cli.store.len() - 1 {
+            println!();
         }
     }
-
-    // show/edit: get the correct identity file (respecting symbolic links)
-    let canonicalised_identity_file = match cli.command {
-        CliCommand::Show { ref name, .. }
-        | CliCommand::Edit { ref name }
-        | CliCommand::Rm { ref name, .. } => get_identity_file_of_correct_store(&store_dir, name)?,
-        CliCommand::Mv {
-            ref old_name,
-            ref new_name,
-        } => {
-            let old_canonicalised_identity_file =
-                get_identity_file_of_correct_store(&store_dir, old_name)?;
-            let new_canonicalised_identity_file =
-                get_identity_file_of_correct_store(&store_dir, new_name)?;
-            if old_canonicalised_identity_file == new_canonicalised_identity_file {
-                old_canonicalised_identity_file
-            } else {
-                return Err(
-                    format!("{old_name} and {new_name} are not part of the same store!").into(),
-                );
-            }
-        }
-        CliCommand::AddRecipient { .. }
-        | CliCommand::Reencrypt
-        | CliCommand::ChangePassphrase
-        | CliCommand::Unlock { .. } => get_identity_file_of_correct_store(&store_dir, "")?,
-        _ => PathBuf::new(),
-    };
-
-    match cli.command {
-        CliCommand::AddRecipient { .. } | CliCommand::Reencrypt => {
-            warn_before_reencryption(&store_dir, &cli)?
-        }
-        _ => {}
-    }
-
-    match cli.command {
-        CliCommand::Init {
-            identity,
-            recipient_alias,
-        } => init(&store_dir, identity, recipient_alias),
-        CliCommand::GitClone { identity, address } => git_clone(&store_dir, identity, address),
-        CliCommand::Edit { name } => edit(&canonicalised_identity_file, &store_dir, name),
-        CliCommand::Show { clip, key, name } => {
-            show(&canonicalised_identity_file, &store_dir, clip, key, name)
-        }
-        CliCommand::Mv { old_name, new_name } => {
-            move_name(&canonicalised_identity_file, &store_dir, old_name, new_name)
-        }
-        CliCommand::Rm { recursive, name } => {
-            remove(&canonicalised_identity_file, &store_dir, recursive, name)
-        }
-        CliCommand::PrintDir => {
-            println!("{}", store_dir.display());
-            Ok(())
-        }
-        CliCommand::Git { args } => {
-            Command::new("git")
-                .arg("-C")
-                .arg(store_dir)
-                .args(args)
-                .status()?
-                .exit_ok()?;
-            Ok(())
-        }
-        CliCommand::AddRecipient { public_key, alias } => {
-            add_recipient(&canonicalised_identity_file, public_key, alias)
-        }
-        CliCommand::Reencrypt => {
-            if reencrypt(&canonicalised_identity_file)? {
-                git_commit(&store_dir, "Reencrypted store")?;
-            }
-            Ok(())
-        }
-        CliCommand::ChangePassphrase => change_passphrase(&canonicalised_identity_file),
-        CliCommand::Unlock { check } => unlock(&canonicalised_identity_file, check),
-        CliCommand::Grep {
-            pattern_or_cmd,
-            args,
-        } => grep_cmd(&store_dir, &pattern_or_cmd, &args),
-        CliCommand::Cat { dirname } => cat(&store_dir, &dirname),
-    }
+    Ok(())
 }
