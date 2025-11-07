@@ -3,7 +3,7 @@
 
 pub mod cli;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
@@ -511,8 +511,7 @@ fn init(
         recipient_alias: Option<&String>,
     ) -> Result<(), Box<dyn Error>> {
         // set up default values
-        let recipient_alias: String =
-            recipient_alias.map_or_else(user_at_host, String::from);
+        let recipient_alias: String = recipient_alias.map_or_else(user_at_host, String::from);
 
         let pubkey = setup_identity(store_dir, identity)?;
 
@@ -2159,7 +2158,7 @@ fn get_default_store_name(senior_dir: &Path) -> OsString {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut cli = Cli::parse();
+    let cli = Cli::parse();
 
     let senior_dir = env::var_os("XDG_DATA_HOME")
         .map_or_else(|| home().join(".local/share/"), PathBuf::from)
@@ -2168,8 +2167,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // default store
     // the store is either the only directory in the senior directory, or "main"
     // or for `senior clone` it is the name of the repository
+    let mut store_dirs = HashSet::new();
     if cli.store.is_empty() {
-        cli.store.push(
+        store_dirs.insert(senior_dir.join(
             if let CliCommand::GitClone { ref address, .. } = cli.command {
                 address
                     .rsplit('/')
@@ -2179,12 +2179,30 @@ fn main() -> Result<(), Box<dyn Error>> {
             } else {
                 get_default_store_name(&senior_dir)
             },
-        );
+        ));
+    } else {
+        for store_arg in &cli.store {
+            if store_arg.to_str().unwrap().contains("*") {
+                let mut no_matches = true;
+                for entry in glob::glob(senior_dir.join(store_arg).to_str().unwrap())? {
+                    no_matches = false;
+                    store_dirs.insert(entry?);
+                }
+                if no_matches {
+                    return Err(format!(
+                        "Glob pattern `{}` matches no stores!",
+                        store_arg.to_str().unwrap()
+                    )
+                    .into());
+                }
+            } else {
+                store_dirs.insert(senior_dir.join(store_arg));
+            }
+        }
     }
 
-    for (store_i, store) in cli.store.iter().enumerate() {
-        let store_dir = senior_dir.join(store);
-        if cli.store.len() > 1 {
+    for (store_i, store_dir) in store_dirs.iter().enumerate() {
+        if store_dirs.len() > 1 {
             let mut ppb = grep::printer::PathPrinterBuilder::new();
             ppb.color_specs(grep::printer::ColorSpecs::new(
                 &grep::printer::default_color_specs(),
@@ -2312,7 +2330,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             CliCommand::Cat { ref dirname } => cat(&store_dir, dirname)?,
         }
 
-        if store_i != cli.store.len() - 1 {
+        if store_i != store_dirs.len() - 1 {
             println!();
         }
     }

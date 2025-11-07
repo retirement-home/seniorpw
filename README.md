@@ -109,7 +109,7 @@ senior git push
 
 ### Multiple Stores
 You can use multiple stores by setting `-s` or `--store`
-```sh
+```shell
 $ ls "$(senior print-dir)"/..
 friends  main  work
 # the default store is `main`
@@ -143,6 +143,12 @@ The same goes for `senior edit` and using `friends/.recipients/*` to encrypt.
 This is very practical for [seniormenu](#seniormenu), as it only looks inside the default store.
 
 If only one store exists then this is the default store. Otherwise, `main` is the default store.
+
+You can use the store argument multiple times or use globbing to run the same command for multiple stores.
+```shell
+$ senior -s '*' git pull
+$ senior -s main -s work add-recipient ...
+```
 
 ### seniormenu
 ```
