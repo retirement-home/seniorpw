@@ -2210,7 +2210,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut path_printer = ppb.build(termcolor::StandardStream::stdout(
                 termcolor::ColorChoice::Auto,
             ));
-            path_printer.write(&store_dir)?;
+            path_printer.write(store_dir)?;
         }
 
         // check existence / non-existence of store
@@ -2243,12 +2243,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let canonicalised_identity_file = match &cli.command {
             CliCommand::Show { name, .. }
             | CliCommand::Edit { name }
-            | CliCommand::Rm { name, .. } => get_identity_file_of_correct_store(&store_dir, name)?,
+            | CliCommand::Rm { name, .. } => get_identity_file_of_correct_store(store_dir, name)?,
             CliCommand::Mv { old_name, new_name } => {
                 let old_canonicalised_identity_file =
-                    get_identity_file_of_correct_store(&store_dir, old_name)?;
+                    get_identity_file_of_correct_store(store_dir, old_name)?;
                 let new_canonicalised_identity_file =
-                    get_identity_file_of_correct_store(&store_dir, new_name)?;
+                    get_identity_file_of_correct_store(store_dir, new_name)?;
                 if old_canonicalised_identity_file == new_canonicalised_identity_file {
                     old_canonicalised_identity_file
                 } else {
@@ -2261,13 +2261,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             CliCommand::AddRecipient { .. }
             | CliCommand::Reencrypt
             | CliCommand::ChangePassphrase
-            | CliCommand::Unlock { .. } => get_identity_file_of_correct_store(&store_dir, "")?,
+            | CliCommand::Unlock { .. } => get_identity_file_of_correct_store(store_dir, "")?,
             _ => PathBuf::new(),
         };
 
         match cli.command {
             CliCommand::AddRecipient { .. } | CliCommand::Reencrypt => {
-                warn_before_reencryption(&store_dir, &get_default_store_name(&senior_dir))?
+                warn_before_reencryption(store_dir, &get_default_store_name(&senior_dir))?
             }
             _ => {}
         }
@@ -2276,19 +2276,19 @@ fn main() -> Result<(), Box<dyn Error>> {
             CliCommand::Init {
                 ref identity,
                 ref recipient_alias,
-            } => init(&store_dir, identity.as_ref(), recipient_alias.as_ref())?,
+            } => init(store_dir, identity.as_ref(), recipient_alias.as_ref())?,
             CliCommand::GitClone {
                 ref identity,
                 ref address,
-            } => git_clone(&store_dir, identity.as_ref(), address)?,
-            CliCommand::Edit { ref name } => edit(&canonicalised_identity_file, &store_dir, name)?,
+            } => git_clone(store_dir, identity.as_ref(), address)?,
+            CliCommand::Edit { ref name } => edit(&canonicalised_identity_file, store_dir, name)?,
             CliCommand::Show {
                 clip,
                 ref key,
                 ref name,
             } => show(
                 &canonicalised_identity_file,
-                &store_dir,
+                store_dir,
                 clip,
                 key.as_ref(),
                 name,
@@ -2296,11 +2296,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             CliCommand::Mv {
                 ref old_name,
                 ref new_name,
-            } => move_name(&canonicalised_identity_file, &store_dir, old_name, new_name)?,
+            } => move_name(&canonicalised_identity_file, store_dir, old_name, new_name)?,
             CliCommand::Rm {
                 recursive,
                 ref name,
-            } => remove(&canonicalised_identity_file, &store_dir, recursive, name)?,
+            } => remove(&canonicalised_identity_file, store_dir, recursive, name)?,
             CliCommand::PrintDir => {
                 println!("{}", store_dir.display());
             }
@@ -2318,7 +2318,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             } => add_recipient(&canonicalised_identity_file, public_key, alias)?,
             CliCommand::Reencrypt => {
                 if reencrypt(&canonicalised_identity_file)? {
-                    git_commit(&store_dir, "Reencrypted store")?;
+                    git_commit(store_dir, "Reencrypted store")?;
                 }
             }
             CliCommand::ChangePassphrase => change_passphrase(&canonicalised_identity_file)?,
@@ -2326,8 +2326,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             CliCommand::Grep {
                 ref pattern_or_cmd,
                 ref args,
-            } => grep_cmd(&store_dir, pattern_or_cmd, args)?,
-            CliCommand::Cat { ref dirname } => cat(&store_dir, dirname)?,
+            } => grep_cmd(store_dir, pattern_or_cmd, args)?,
+            CliCommand::Cat { ref dirname } => cat(store_dir, dirname)?,
         }
 
         if store_i != store_dirs.len() - 1 {
