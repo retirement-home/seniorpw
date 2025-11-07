@@ -512,7 +512,7 @@ fn init(
     ) -> Result<(), Box<dyn Error>> {
         // set up default values
         let recipient_alias: String =
-            recipient_alias.map_or_else(|| user_at_host(), |r| String::from(r));
+            recipient_alias.map_or_else(user_at_host, String::from);
 
         let pubkey = setup_identity(store_dir, identity)?;
 
@@ -619,15 +619,15 @@ fn format_cmd(cmd: &[&str]) -> String {
 fn git_clone(
     store_dir: &Path,
     identity: Option<&String>,
-    address: &String,
+    address: &str,
 ) -> Result<(), Box<dyn Error>> {
     fn git_clone_helper(
         store_dir: &Path,
         identity: Option<&String>,
-        address: &String,
+        address: &str,
     ) -> Result<(), Box<dyn Error>> {
         Command::new("git")
-            .args(["clone", &address])
+            .args(["clone", address])
             .arg(store_dir)
             .status()?
             .exit_ok()?;
@@ -1166,7 +1166,7 @@ fn show(
         s.split('\n').next().unwrap()
     }
 
-    let name_dir = store_dir.join(&name);
+    let name_dir = store_dir.join(name);
     let agefile = store_dir.join(format!("{}.age", &name));
 
     if !agefile.exists() {
@@ -1375,13 +1375,13 @@ fn move_name(
     new_name: &str,
 ) -> Result<(), Box<dyn Error>> {
     let canon_store_dir = identity_file.parent().unwrap();
-    let mut old_path = store_dir.join(&old_name);
-    let mut new_path = store_dir.join(&new_name);
+    let mut old_path = store_dir.join(old_name);
+    let mut new_path = store_dir.join(new_name);
     let old_path_file = store_dir.join(format!("{}.age", &old_name));
     let new_path_file = store_dir.join(format!("{}.age", &new_name));
     // for git later
-    let old_canon_name = canonicalise(&store_dir.join(&old_name))?;
-    let new_canon_name = canonicalise(&store_dir.join(&new_name))?;
+    let old_canon_name = canonicalise(&store_dir.join(old_name))?;
+    let new_canon_name = canonicalise(&store_dir.join(new_name))?;
 
     if !old_name.ends_with('/') && old_path_file.is_file() {
         old_path = old_path_file;
@@ -1453,10 +1453,10 @@ fn remove(
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
     let canon_store_dir = identity_file.parent().unwrap();
-    let mut path = store_dir.join(&name);
+    let mut path = store_dir.join(name);
     let path_file = store_dir.join(format!("{}.age", &name));
     // for git later
-    let canon_name = canonicalise(&store_dir.join(&name))?;
+    let canon_name = canonicalise(&store_dir.join(name))?;
 
     if !name.ends_with('/') && path_file.is_file() {
         path = path_file.canonicalize()?;
@@ -1567,7 +1567,7 @@ fn add_recipient(
     public_key: &str,
     alias: &str,
 ) -> Result<(), Box<dyn Error>> {
-    if let Err(e) = recipient_from_str(&public_key) {
+    if let Err(e) = recipient_from_str(public_key) {
         return Err(
             format!("The supplied recipient is not a valid age or ssh public key! {e}").into(),
         );
