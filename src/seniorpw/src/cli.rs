@@ -6,9 +6,9 @@ use clap::{Parser, Subcommand, builder::ValueHint};
 #[command(author, version, about, long_about = None)]
 /// A password manager, inspired by password-store, using age for encryption
 pub struct Cli {
-    /// Alias for the store; default: "main", or the only existing one,
-    ///                      or for `senior clone` the name of the repository
-    #[arg(short, long)]
+    /// Name of the store; default: "main", or the only existing one,
+    /// or for `senior clone` the name of the repository
+    #[arg(short, long, value_hint = ValueHint::AnyPath)]
     pub store: Vec<OsString>,
 
     #[command(subcommand)]
@@ -23,8 +23,8 @@ pub enum CliCommand {
         #[arg(short, long, value_name = "FILE", value_hint = ValueHint::AnyPath)]
         identity: Option<String>,
 
-        /// Alias for the recipient; default: your username
-        #[arg(short = 'a', long = "recipient-alias", value_name = "USERNAME")]
+        /// Your recipient name; default: username@hostname
+        #[arg(short = 'a', long = "recipient-alias", value_name = "USER@HOST")]
         recipient_alias: Option<String>,
     },
 

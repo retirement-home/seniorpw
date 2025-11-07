@@ -53,8 +53,8 @@ _senior() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" \
-'-s[Alias for the store; default: "main", or the only existing one, or for `senior clone` the name of the repository]:STORE:_senior_stores' \
-'--store=[Alias for the store; default: "main", or the only existing one, or for `senior clone` the name of the repository]:STORE:_senior_stores' \
+'*-s[Name of the store; default: "main", or the only existing one, or for `senior clone` the name of the repository]:STORE:_senior_stores' \
+'*--store=[Name of the store; default: "main", or the only existing one, or for `senior clone` the name of the repository]:STORE:_senior_stores' \
 '-h[Print help]' \
 '--help[Print help]' \
 '-V[Print version]' \
@@ -76,8 +76,8 @@ _senior() {
 _arguments "${_arguments_options[@]}" \
 '-i[Path of the identity used for decrypting; default: generate a new one]:FILE:_files' \
 '--identity=[Path of the identity used for decrypting; default: generate a new one]:FILE:_files' \
-'-a[Alias for the recipient; default: your username]:USERNAME: ' \
-'--recipient-alias=[Alias for the recipient; default: your username]:USERNAME: ' \
+'-a[Your recipient name; default: username@hostname]:USER@HOST: ' \
+'--recipient-alias=[Your recipient name; default: username@hostname]:USER@HOST: ' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
