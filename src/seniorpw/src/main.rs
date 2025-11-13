@@ -2162,13 +2162,17 @@ fn get_default_store_name(senior_dir: &Path) -> OsString {
     }
 }
 
-fn type_string(typing_program: Option<&str>, key_delay: Option<u16>, text: &str) -> Result<(), Box<dyn Error>> {
+fn type_string(
+    typing_program: Option<&str>,
+    key_delay: Option<u16>,
+    text: &str,
+) -> Result<(), Box<dyn Error>> {
     let typing_programs = match typing_program {
         Some(t) => vec![t],
         None => vec!["ydotool", "wtype", "wlrctl", "xte", "xdotool", "xvkbd"],
     };
 
-    let key_delay = key_delay.map(|d|  d.to_string());
+    let key_delay = key_delay.map(|d| d.to_string());
     for &tp in &typing_programs {
         let typing_args = if let Some(ref delay) = key_delay {
             match tp {
@@ -2177,25 +2181,33 @@ fn type_string(typing_program: Option<&str>, key_delay: Option<u16>, text: &str)
                 "xkvbd" => vec!["-delay", delay],
                 _ => {
                     if typing_program.is_some() {
-                        eprintln!("Typing program set to `{tp}` and key delay set to {delay} ms, but seniorpw does know how to set a key delay with `{tp}`!");
+                        eprintln!(
+                            "Typing program set to `{tp}` and key delay set to {delay} ms, but seniorpw does know how to set a key delay with `{tp}`!"
+                        );
                     }
                     vec![]
                 }
             }
-        } else { vec![] };
+        } else {
+            vec![]
+        };
         let mut cmd = Command::new(tp);
         match match tp {
             "wtype" => cmd.args(typing_args).arg(text),
             "xkvbd" => cmd.args(typing_args).arg("-text").arg(text),
             _ => cmd.arg("type").args(typing_args).arg(text),
-        }.status() {
+        }
+        .status()
+        {
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 if typing_program.is_some() {
-                    return Err(format!("Typing program set to {tp}, but cannot start {tp}!").into());
+                    return Err(
+                        format!("Typing program set to {tp}, but cannot start {tp}!").into(),
+                    );
                 }
             }
             Err(e) => return Err(e.into()),
-            Ok(s) => return s.exit_ok()
+            Ok(s) => return s.exit_ok(),
         }
     }
     Err(format!("Please set the typing program to an installed program! Cannot start any of the following programs: {typing_programs:?}").into())
@@ -2212,12 +2224,10 @@ fn menu_cmd(
     let x_menus = ["dmenu"];
     let menu_programs = match menu_program {
         Some(m) => vec![m],
-        None => {
-            match get_display_server() {
-                DisplayServer::Wayland => [&wayland_menus[..], &x_menus[..]].concat(),
-                _ => [&x_menus[..], &wayland_menus[..]].concat(),
-            }
-        }
+        None => match get_display_server() {
+            DisplayServer::Wayland => [&wayland_menus[..], &x_menus[..]].concat(),
+            _ => [&x_menus[..], &wayland_menus[..]].concat(),
+        },
     };
 
     let mut results: Vec<String> = WalkDir::new(store_dir)
@@ -2244,7 +2254,11 @@ fn menu_cmd(
 
     let mut password_name = String::new();
     for (i, mp) in menu_programs.iter().enumerate() {
-        let mut child = match Command::new(mp).stdout(Stdio::piped()).stdin(Stdio::piped()).spawn() {
+        let mut child = match Command::new(mp)
+            .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()
+        {
             Ok(c) => c,
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 if menu_program.is_some() {
@@ -2253,7 +2267,7 @@ fn menu_cmd(
                     return Err(format!("Please set a valid menu program! Cannot start any of the following menus: {menu_programs:?}").into());
                 }
                 continue;
-            },
+            }
             Err(e) => return Err(e.into()),
         };
         let stdin_writer = child.stdin.as_mut().unwrap();
@@ -2474,7 +2488,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 key_delay,
                 ref action_args,
             } => {
-                menu_cmd(store_dir, menu_program.as_ref().map(|s| s.as_str()), typing_program.as_ref().map(|s| s.as_str()), key_delay, action_args)?;
+                menu_cmd(
+                    store_dir,
+                    menu_program.as_ref().map(|s| s.as_str()),
+                    typing_program.as_ref().map(|s| s.as_str()),
+                    key_delay,
+                    action_args,
+                )?;
             }
         }
         if store_i != store_dirs.len() - 1 {
