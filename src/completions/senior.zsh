@@ -52,9 +52,9 @@ _senior() {
     fi
 
     local context curcontext="$curcontext" state line
-    _arguments "${_arguments_options[@]}" \
-'*-s[Name of the store; default: "main", or the only existing one, or for `senior clone` the name of the repository]:STORE:_senior_stores' \
-'*--store=[Name of the store; default: "main", or the only existing one, or for `senior clone` the name of the repository]:STORE:_senior_stores' \
+    _arguments "${_arguments_options[@]}" : \
+'*-s[Name of the store; default\: "main", or the only existing one, or for \`senior clone\` the name of the repository]:STORE:_senior_stores' \
+'*--store=[Name of the store; default\: "main", or the only existing one, or for \`senior clone\` the name of the repository]:STORE:_senior_stores' \
 '-h[Print help]' \
 '--help[Print help]' \
 '-V[Print version]' \
@@ -73,8 +73,8 @@ _senior() {
         curcontext="${curcontext%:*:*}:senior-command-$line[1]:"
         case $line[1] in
             (init)
-_arguments "${_arguments_options[@]}" \
-'-i[Path of the identity used for decrypting; default: generate a new one]:FILE:_files' \
+_arguments "${_arguments_options[@]}" : \
+'-i[Path of the identity used for decrypting; default\: generate a new one]:FILE:_files' \
 '--identity=[Path of the identity used for decrypting; default: generate a new one]:FILE:_files' \
 '-a[Your recipient name; default: username@hostname]:USER@HOST: ' \
 '--recipient-alias=[Your recipient name; default: username@hostname]:USER@HOST: ' \
@@ -83,8 +83,8 @@ _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
 (clone)
-_arguments "${_arguments_options[@]}" \
-'-i[Path of the identity used for decrypting; default: generate a new one]:FILE:_files' \
+_arguments "${_arguments_options[@]}" : \
+'-i[Path of the identity used for decrypting; default\: generate a new one]:FILE:_files' \
 '--identity=[Path of the identity used for decrypting; default: generate a new one]:FILE:_files' \
 '-h[Print help]' \
 '--help[Print help]' \
@@ -92,14 +92,14 @@ _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
 (edit)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-h[Print help]' \
 '--help[Print help]' \
 ':name -- Name of the password:_senior_complete_entries' \
 && ret=0
 ;;
 (show|s)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-k[Show only this key; "password" shows the first line; "otp" generates the one-time password]:otp|user|email|...: ' \
 '--key=[Show only this key; "password" shows the first line; "otp" generates the one-time password]:otp|user|email|...: ' \
 '-c[Add the value to the clipboard]' \
@@ -110,7 +110,7 @@ _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
 (mv)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-h[Print help]' \
 '--help[Print help]' \
 ':old_name -- Old name of the password or directory:_senior_complete_entries_with_subdirs' \
@@ -118,7 +118,7 @@ _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
 (rm)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-r[For directories]' \
 '--recursive[For directories]' \
 '-h[Print help]' \
@@ -126,8 +126,58 @@ _arguments "${_arguments_options[@]}" \
 ':name -- Name of the password or directory:_senior_complete_entries_with_subdirs' \
 && ret=0
 ;;
+(menu)
+_arguments "${_arguments_options[@]}" : \
+'--menu-program=[]:MENU_PROGRAM:_default' \
+'--typing-program=[]:TYPING_PROGRAM:_default' \
+'-d[]:MILLISECONDS: ' \
+'--key-delay=[]:MILLISECONDS: ' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_senior__menu_commands" \
+"*::: :->menu" \
+&& ret=0
+
+    case $state in
+    (menu)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+		if [ $((CURRENT % 2)) -ne 0 ] && [ "$CURRENT" -ge 3 ]; then
+			CURRENT=2
+			words=($state)
+			line=($state)
+			curcontext="${curcontext%:*:*}:senior-menu-command-$state:"
+			_senior__menu_commands
+		else
+			curcontext="${curcontext%:*:*}:senior-menu-command-$line[1]:"
+		fi
+        case $line[1] in
+            (clip)
+_arguments "${_arguments_options[@]}" : \
+':key -- The key that should be clipped; "password" clips the first line; "otp" generates the one-time password: ' \
+&& ret=0
+;;
+(type-content)
+_arguments "${_arguments_options[@]}" : \
+':key -- The key that should be typed; "password" clips the first line; "otp" generates the one-time password: ' \
+&& ret=0
+;;
+(type-text)
+_arguments "${_arguments_options[@]}" : \
+':text -- The text that should be typed;: ' \
+&& ret=0
+;;
+(sleep)
+_arguments "${_arguments_options[@]}" : \
+':delay -- The number of milliseconds to wait: ' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (print-dir)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -145,7 +195,7 @@ _arguments "${_arguments_options[@]}" \
 	_describe -t commands 'senior git' subcommands
 ;;
 (add-recipient)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-h[Print help]' \
 '--help[Print help]' \
 ':public_key -- Public key of the new recipient:' \
@@ -153,13 +203,13 @@ _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
 (reencrypt)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
 ;;
 (change-passphrase)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -180,14 +230,14 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (unlock)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 '--check[Do not prompt to unlock; Return an error if the store is locked; Useful for scripts]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
 ;;
 (help)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 ":: :_senior__help_commands" \
 "*::: :->help" \
 && ret=0
@@ -199,51 +249,83 @@ _arguments "${_arguments_options[@]}" \
         curcontext="${curcontext%:*:*}:senior-help-command-$line[1]:"
         case $line[1] in
             (init)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (clone)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (edit)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (show)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (mv)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (rm)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(menu)
+_arguments "${_arguments_options[@]}" : \
+":: :_senior__help__menu_commands" \
+"*::: :->menu" \
+&& ret=0
+
+    case $state in
+    (menu)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:senior-help-menu-command-$line[1]:"
+        case $line[1] in
+            (clip)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(type-content)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(type-text)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(sleep)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (print-dir)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (git)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (add-recipient)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (reencrypt)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (change-passphrase)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (grep)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (cat)
@@ -251,11 +333,11 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (unlock)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (help)
-_arguments "${_arguments_options[@]}" \
+_arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
         esac
@@ -276,6 +358,7 @@ _senior_commands() {
 'show:Show a password' \
 'mv:Move a password' \
 'rm:Remove a password' \
+'menu:Launch a menu to select a password and type/clip it' \
 'print-dir:Print the directory of the store' \
 'git:Run git commands in the store' \
 'add-recipient:Add recipient' \
@@ -332,6 +415,7 @@ _senior__help_commands() {
 'show:Show a password' \
 'mv:Move a password' \
 'rm:Remove a password' \
+'menu:Launch a menu to select a password and type/clip it' \
 'print-dir:Print the directory of the store' \
 'git:Run git commands in the store' \
 'add-recipient:Add recipient' \
@@ -389,6 +473,16 @@ _senior__help__init_commands() {
     local commands; commands=()
     _describe -t commands 'senior help init commands' commands "$@"
 }
+(( $+functions[_senior__help__menu_commands] )) ||
+_senior__help__menu_commands() {
+    local commands; commands=(
+'clip:Add the value to the clipboard' \
+'type-content:Type the value' \
+'type-text:Type text' \
+'sleep:Wait' \
+    )
+    _describe -t commands 'senior help menu commands' commands "$@"
+}
 (( $+functions[_senior__help__mv_commands] )) ||
 _senior__help__mv_commands() {
     local commands; commands=()
@@ -423,6 +517,21 @@ _senior__help__unlock_commands() {
 _senior__init_commands() {
     local commands; commands=()
     _describe -t commands 'senior init commands' commands "$@"
+}
+(( $+functions[_senior__menu_commands] )) ||
+_senior__menu_commands() {
+    local commands; commands=(
+'clip:Add the value to the clipboard' \
+'type-content:Type the value' \
+'type-text:Type text' \
+'sleep:Wait' \
+    )
+    _describe -t commands 'senior menu commands' commands "$@"
+}
+(( $+functions[_senior__menu__clip_commands] )) ||
+_senior__menu__clip_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior menu clip commands' commands "$@"
 }
 (( $+functions[_senior__mv_commands] )) ||
 _senior__mv_commands() {

@@ -44,8 +44,8 @@ _senior_complete_entries () {
         # append / to directories
         [[ -d $item ]] && item="$item/"
 
-	# directories only
-	[[ $dirsonly -eq 1 && ! -d $item ]] && continue
+        # directories only
+        [[ $dirsonly -eq 1 && ! -d $item ]] && continue
 
         item="${item%$suffix}"
         COMPREPLY+=("${item#$prefix}")
@@ -107,6 +107,9 @@ _senior() {
             senior,init)
                 cmd="senior__init"
                 ;;
+            senior,menu)
+                cmd="senior__menu"
+                ;;
             senior,mv)
                 cmd="senior__mv"
                 ;;
@@ -152,6 +155,9 @@ _senior() {
             senior__help,init)
                 cmd="senior__help__init"
                 ;;
+            senior__help,menu)
+                cmd="senior__help__menu"
+                ;;
             senior__help,mv)
                 cmd="senior__help__mv"
                 ;;
@@ -170,14 +176,32 @@ _senior() {
             senior__help,unlock)
                 cmd="senior__help__unlock"
                 ;;
+            senior__menu,clip)
+                cmd="senior__menu__clip"
+                ;;
+            senior__menu,help)
+                cmd="senior__menu__help"
+                ;;
+            senior__menu,sleep)
+                cmd="senior__menu__sleep"
+                ;;
+            senior__menu,type-content)
+                cmd="senior__menu__type__content"
+                ;;
+            senior__menu,type-text)
+                cmd="senior__menu__type__text"
+                ;;
             *)
+                if [[ $cmd == senior__menu__* ]]; then
+                    cmd="senior__menu"
+                fi
                 ;;
         esac
     done
 
     case "${cmd}" in
         senior)
-            opts="-s -h -V --store --help --version init clone edit show mv rm print-dir git add-recipient reencrypt change-passphrase grep cat unlock help"
+            opts="-s -h -V --store --help --version init clone edit show mv rm menu print-dir git add-recipient reencrypt change-passphrase grep cat unlock help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -524,6 +548,85 @@ _senior() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__menu)
+            arg_flags=("-d" "-h" "--menu-program" "--typing-program" "--key-delay" "--help")
+            actions=("clip" "type-content" "type-text" "sleep")
+            if [[ "${prev}" = "menu" || " ${arg_flags[@]} " =~ " ${COMP_WORDS[-3]} " ]]; then
+                opts="${arg_flags[@]} ${actions[@]}"
+            elif [[ " ${actions[@]} " =~ " ${COMP_WORDS[-3]} " ]]; then
+                opts="${actions[@]}"
+            else
+                case "${prev}" in
+                    --typing-program)
+                        opts="ydotool xdotool wtype keyboard <TYPING PROGRAM>"
+                    -d|--key-delay)
+                        opts="100 1000 <MILLISECONDS>"
+                    --menu-program)
+                        opts="dmenu-wl bemenu rofi dmenu <MENU PROGRAM>"
+                    *)
+                        COMPREPLY=()
+                        return 0
+                esac
+            fi
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__menu__clip)
+            opts="password user otp email <KEY>"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__menu__sleep)
+            opts="100 1000 <MILLISECONDS>"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__menu__type__content)
+            opts="password user otp email <KEY>"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__menu__type__text)
+            opts='\"\\n\" \"\\t\" <TEXT>'
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 *)
                     COMPREPLY=()
                     ;;

@@ -17,7 +17,7 @@ seniorpw's features are
 - Multiple stores
 - OTP support
 - Clipboard support for [Linux](https://kernel.org/) ([Wayland](https://wayland.freedesktop.org/) and [X11](https://www.x.org/wiki/)), [Termux](https://termux.dev/en/), [WSL](https://learn.microsoft.com/en-us/windows/wsl/about), [Darwin](https://opensource.apple.com/) ([macOS](https://www.apple.com/macos/))
-- Select and automatically copy or type ([ydotool](https://github.com/ReimuNotMoe/ydotool) or [xdotool](https://github.com/jordansissel/xdotool)) a password via `seniormenu`
+- Select and automatically copy or type a password via `senior menu`
 - git support
 - Completions for bash and zsh
 - Passphrase protected identities
@@ -140,7 +140,7 @@ equivalent.
 seniorpw recognises that `main/friends/example.com` is actually at `friends/example.com` and therefore uses
 `friends/.identity.age` to decrypt.
 The same goes for `senior edit` and using `friends/.recipients/*` to encrypt.
-This is very practical for [seniormenu](#seniormenu), as it only looks inside the default store.
+This is very practical for [senior menu](#senior-menu).
 
 If only one store exists then this is the default store. Otherwise, `main` is the default store.
 
@@ -150,23 +150,21 @@ senior -s '*' git pull
 senior -s main -s work add-recipient ...
 ```
 
-### seniormenu
+### senior menu
 ```
-seniormenu [--menu <dmenu-wl>] [--dotool <ydotool>] [--type] [<key1> <key2> ...]
+senior menu type-content <KEY1> type-text <TEXT1> sleep <MILLISECONDS> type-content <KEY2> type-text <TEXT2> ...
+senior menu clip <KEY>
 ```
-seniormenu uses `dmenu-wl` or `dmenu` (can be changed with `--menu <othermenu>`) to let you select a password for the clipboard.
-You can provide a `<key>` to get another value from the password file (like user, email, ...).
+`senior menu` uses a `dmenu`-like program (can be set with `--menu-program <PROGRAM>`) to let you select a password for the clipboard or for typing.
 
-With `--type` the password gets typed using [ydotool](https://github.com/ReimuNotMoe/ydotool) (for Wayland) / [xdotool](https://github.com/jordansissel/xdotool) (for X11). The default can be changed with `--dotool <otherdotool>`.
-
-ydotool feature only: You can specify multiple keys. Inbetween keys, a TAB is typed. After typing the password or the otp, the ENTER key gets pressed.
+The typing program can be changed via `--typing-program <PROGRAM>`.
 
 Set up some keybindings in your window manager to quickly clip/type passwords.
 An example for sway/i3 is
 ```
-bindsym $mod+u exec seniormenu --menu bemenu --type
-bindsym $mod+y exec seniormenu --menu bemenu --type otp
-bindsym $mod+t exec seniormenu --menu bemenu --type user password
+bindsym $mod+u exec senior menu type-content password type-text "\n"
+bindsym $mod+y exec senior menu type-content otp type-text "\n"
+bindsym $mod+t exec senior menu type-content user type-text "\t" type-content password type-text "\n"
 ```
 
 ### senior-agent

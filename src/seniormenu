@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+echo '`seniormenu` is deprecated (and maybe even depreceated). Please use `senior menu` instead.'
+
 shopt -s nullglob globstar
 
 typeit=0

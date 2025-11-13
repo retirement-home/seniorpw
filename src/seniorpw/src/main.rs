@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{self, ChildStdout, Command, ExitStatus, Stdio};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{env, str::FromStr};
+use std::{thread, time};
 
 use senior::{get_socket_name, geteuid};
 
@@ -1154,6 +1155,114 @@ where
     ret
 }
 
+fn get_value_from_password_content(
+    content: &str,
+    key: &str,
+    agefile: &Path,
+) -> Result<String, Box<dyn Error>> {
+    let mut lines = content.split('\n');
+    if key.is_empty() || key == "password" {
+        return Ok(String::from(lines.next().unwrap_or_default()));
+    }
+
+    let key_to_search = match key {
+        "otp" => String::from("otpauth:"),
+        k => format!("{k}:"),
+    };
+    let value = loop {
+        let line = lines.next().ok_or(format!(
+            "Cannot find key '{}' in password file {}!",
+            &key_to_search[..(key_to_search.len() - 1)],
+            agefile.display()
+        ))?;
+        if !line.starts_with(&key_to_search) {
+            continue;
+        }
+        break line[(key_to_search.len() + 1)..].trim();
+    };
+
+    match key {
+        "otp" => {
+            if !value.contains("secret=") {
+                return Err("otpauth string does not contain a secret".into());
+            }
+            let secret = value
+                .split_once("secret=")
+                .ok_or("Cannot find secret in otpauth string!")?
+                .1;
+            let secret = secret
+                .split(&['=', '&'])
+                .next()
+                .unwrap_or(value)
+                .to_uppercase();
+            Ok(thotp::otp(
+                &base32::decode(base32::Alphabet::Rfc4648 { padding: false }, &secret).unwrap(),
+                SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / 30,
+            )?
+            .to_owned())
+        }
+        _ => Ok(value.to_owned()),
+    }
+}
+
+fn set_clipboard(value: &str) -> Result<(), Box<dyn Error>> {
+    // TODO: support Windows
+    match get_display_server() {
+        DisplayServer::Wayland => {
+            match Command::new("wl-copy").args(["-o", value]).status() {
+                Err(e) if e.kind() == ErrorKind::NotFound => Err("Using Wayland, but cannot run wl-copy! Please install wl-clipboard!".into()),
+                Err(e) => Err(e.into()),
+                Ok(s) => s.exit_ok(),
+            }
+        }
+        DisplayServer::X11 => {
+            match Command::new("xclip").stdin(Stdio::piped()).spawn() {
+                Err(e) if e.kind() == ErrorKind::NotFound => Err("Using X11, but cannot run xclip! Please install xclip!".into()),
+                Err(e) => Err(e.into()),
+                Ok(mut c) => {
+                    c.stdin.as_mut().unwrap().write_all(value.as_bytes())?;
+                    c.wait()?.exit_ok()
+                },
+            }
+        }
+        DisplayServer::Termux => {
+            match Command::new("termux-clipboard-set").stdin(Stdio::piped()).spawn() {
+                Err(e) if e.kind() == ErrorKind::NotFound => Err("Please install Termux:API (https://f-droid.org/en/packages/com.termux.api/) and `pkg install termux-api`!".into()),
+                Err(e) => Err(e.into()),
+                Ok(mut c) => {
+                    c.stdin.as_mut().unwrap().write_all(value.as_bytes())?;
+                    c.wait()?.exit_ok()
+                },
+            }
+        }
+        DisplayServer::Wsl => {
+            match Command::new("clip.exe").stdin(Stdio::piped()).spawn() {
+                Err(e) if e.kind() == ErrorKind::NotFound => Err("Using WSL, but cannot run clip.exe!".into()),
+                Err(e) => Err(e.into()),
+                Ok(mut c) => {
+                    c.stdin.as_mut().unwrap().write_all(value.as_bytes())?;
+                    c.wait()?.exit_ok()
+                },
+            }
+        }
+        DisplayServer::Darwin => {
+            match Command::new("pbcopy").stdin(Stdio::piped()).spawn() {
+                Err(e) if e.kind() == ErrorKind::NotFound => Err("Using Darwin (macOS), but cannot find pbcopy!".into()),
+                Err(e) => Err(e.into()),
+                Ok(mut c) => {
+                    c.stdin.as_mut().unwrap().write_all(value.as_bytes())?;
+                    c.wait()?.exit_ok()
+                }
+            }
+        }
+        _ => {
+            Err(
+                "Clipboard only implemented for Wayland (wl-copy), X11 (xclip), Termux (termux-clipboard-set), WSL (clip.exe), and Darwin (pbcopy) yet!".into(),
+            )
+        }
+    }
+}
+
 fn show(
     identity_file: &Path,
     store_dir: &Path,
@@ -1161,10 +1270,6 @@ fn show(
     key: Option<&String>,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
-    fn first_line(s: &str) -> &str {
-        s.split('\n').next().unwrap()
-    }
-
     let name_dir = store_dir.join(name);
     let agefile = store_dir.join(format!("{}.age", &name));
 
@@ -1233,117 +1338,17 @@ fn show(
         return Ok(());
     }
 
-    let mut reader = decrypt_password(&unlock_identity(identity_file)?, &agefile)?;
-    let mut output = String::new();
-    reader.read_to_string(&mut output)?;
-    let mut _otp = String::new();
-    let (to_print, to_clip) = match key {
-        // show everything, clip the first line
-        None => (output.trim_end(), first_line(&output)),
-        // show the value for the key, clip it
-        Some(key) => match key.trim() {
-            "password" => (first_line(&output), first_line(&output)),
-            key => {
-                let key_to_search = match key {
-                    "otp" => String::from("otpauth:"),
-                    k => format!("{k}:"),
-                };
-                let mut lines = output.split('\n');
-                let value = loop {
-                    let line = lines.next().ok_or(format!(
-                        "Cannot find key '{}' in password file {}!",
-                        &key_to_search[..(key_to_search.len() - 1)],
-                        agefile.display()
-                    ))?;
-                    if !line.starts_with(&key_to_search) {
-                        continue;
-                    }
-                    break line[(key_to_search.len() + 1)..].trim();
-                };
+    let mut content = String::new();
+    decrypt_password(&unlock_identity(identity_file)?, &agefile)?.read_to_string(&mut content)?;
 
-                match key {
-                    "otp" => {
-                        if !value.contains("secret=") {
-                            return Err("otpauth string does not contain a secret".into());
-                        }
-                        let secret = value
-                            .split_once("secret=")
-                            .ok_or("Cannot find secret in otpauth string!")?
-                            .1;
-                        let secret = secret
-                            .split(&['=', '&'])
-                            .next()
-                            .unwrap_or(value)
-                            .to_uppercase();
-                        _otp = thotp::otp(
-                            &base32::decode(base32::Alphabet::Rfc4648 { padding: false }, &secret)
-                                .unwrap(),
-                            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / 30,
-                        )?;
-                        (&_otp[..], &_otp[..])
-                    }
-                    _ => (value, value),
-                }
-            }
-        },
-    };
-    println!("{to_print}");
-    // TODO: support Windows
+    let value =
+        get_value_from_password_content(&content, key.map_or("", |s| s.as_str()), &agefile)?;
+    match key {
+        Some(_) => println!("{value}"),
+        None => println!("{content}"),
+    }
     if clip {
-        match get_display_server() {
-            DisplayServer::Wayland => {
-                match Command::new("wl-copy").args(["-o", to_clip]).status() {
-                    Err(e) if e.kind() == ErrorKind::NotFound => return Err("Using Wayland, but cannot run wl-copy! Please install wl-clipboard!".into()),
-                    Err(e) => return Err(e.into()),
-                    Ok(s) => s.exit_ok()?,
-                }
-            }
-            DisplayServer::X11 => {
-                match Command::new("xclip").stdin(Stdio::piped()).spawn() {
-                    Err(e) if e.kind() == ErrorKind::NotFound => return Err("Using X11, but cannot run xclip! Please install xclip!".into()),
-                    Err(e) => return Err(e.into()),
-                    Ok(mut c) => {
-                        c.stdin.as_mut().unwrap().write_all(to_clip.as_bytes())?;
-                        c.wait()?.exit_ok()?;
-                    },
-                }
-            }
-            DisplayServer::Termux => {
-                match Command::new("termux-clipboard-set").stdin(Stdio::piped()).spawn() {
-                    Err(e) if e.kind() == ErrorKind::NotFound => return Err("Please install Termux:API (https://f-droid.org/en/packages/com.termux.api/) and `pkg install termux-api`!".into()),
-                    Err(e) => return Err(e.into()),
-                    Ok(mut c) => {
-                        c.stdin.as_mut().unwrap().write_all(to_clip.as_bytes())?;
-                        c.wait()?.exit_ok()?;
-                    },
-                }
-            }
-            DisplayServer::Wsl => {
-                match Command::new("clip.exe").stdin(Stdio::piped()).spawn() {
-                    Err(e) if e.kind() == ErrorKind::NotFound => return Err("Using WSL, but cannot run clip.exe!".into()),
-                    Err(e) => return Err(e.into()),
-                    Ok(mut c) => {
-                        c.stdin.as_mut().unwrap().write_all(to_clip.as_bytes())?;
-                        c.wait()?.exit_ok()?;
-                    },
-                }
-            }
-            DisplayServer::Darwin => {
-                match Command::new("pbcopy").stdin(Stdio::piped()).spawn() {
-                    Err(e) if e.kind() == ErrorKind::NotFound => return Err("Using Darwin (macOS), but cannot find pbcopy!".into()),
-                    Err(e) => return Err(e.into()),
-                    Ok(mut c) => {
-                        c.stdin.as_mut().unwrap().write_all(to_clip.as_bytes())?;
-                        c.wait()?.exit_ok()?;
-                    }
-                }
-            }
-            _ => {
-                return Err(
-                    "Clipboard only implemented for Wayland (wl-copy), X11 (xclip), Termux (termux-clipboard-set), WSL (clip.exe), and Darwin (pbcopy) yet!".into(),
-                )
-            }
-        }
+        set_clipboard(&value)?;
     }
     Ok(())
 }
@@ -1974,19 +1979,19 @@ impl PasswordIter {
     }
 }
 
+fn is_hidden(entry: &walkdir::DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| s.starts_with("."))
+        .unwrap_or(false)
+}
+
 impl Iterator for PasswordIter {
     // returns a tuple: (name, content)
     type Item = (PathBuf, age::stream::StreamReader<File>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        fn is_hidden(entry: &walkdir::DirEntry) -> bool {
-            entry
-                .file_name()
-                .to_str()
-                .map(|s| s.starts_with("."))
-                .unwrap_or(false)
-        }
-
         let agefile: PathBuf = loop {
             let direntry = self
                 .walkdir
@@ -2157,8 +2162,146 @@ fn get_default_store_name(senior_dir: &Path) -> OsString {
     }
 }
 
+fn type_string(typing_program: Option<&str>, key_delay: Option<u16>, text: &str) -> Result<(), Box<dyn Error>> {
+    let typing_programs = match typing_program {
+        Some(t) => vec![t],
+        None => vec!["ydotool", "wtype", "wlrctl", "xte", "xdotool", "xvkbd"],
+    };
+
+    let key_delay = key_delay.map(|d|  d.to_string());
+    for &tp in &typing_programs {
+        let typing_args = if let Some(ref delay) = key_delay {
+            match tp {
+                "ydotool" | "wtype" => vec!["-d", delay],
+                "xdotool" => vec!["--delay", delay],
+                "xkvbd" => vec!["-delay", delay],
+                _ => {
+                    if typing_program.is_some() {
+                        eprintln!("Typing program set to `{tp}` and key delay set to {delay} ms, but seniorpw does know how to set a key delay with `{tp}`!");
+                    }
+                    vec![]
+                }
+            }
+        } else { vec![] };
+        let mut cmd = Command::new(tp);
+        match match tp {
+            "wtype" => cmd.args(typing_args).arg(text),
+            "xkvbd" => cmd.args(typing_args).arg("-text").arg(text),
+            _ => cmd.arg("type").args(typing_args).arg(text),
+        }.status() {
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                if typing_program.is_some() {
+                    return Err(format!("Typing program set to {tp}, but cannot start {tp}!").into());
+                }
+            }
+            Err(e) => return Err(e.into()),
+            Ok(s) => return s.exit_ok()
+        }
+    }
+    Err(format!("Please set the typing program to an installed program! Cannot start any of the following programs: {typing_programs:?}").into())
+}
+
+fn menu_cmd(
+    store_dir: &Path,
+    menu_program: Option<&str>,
+    typing_program: Option<&str>,
+    key_delay: Option<u16>,
+    action_args: &[String],
+) -> Result<(), Box<dyn Error>> {
+    let wayland_menus = ["bemenu", "tofi", "dmenu-wl", "mew", "wmenu", "mauncher"];
+    let x_menus = ["dmenu"];
+    let menu_programs = match menu_program {
+        Some(m) => vec![m],
+        None => {
+            match get_display_server() {
+                DisplayServer::Wayland => [&wayland_menus[..], &x_menus[..]].concat(),
+                _ => [&x_menus[..], &wayland_menus[..]].concat(),
+            }
+        }
+    };
+
+    let mut results: Vec<String> = WalkDir::new(store_dir)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| !is_hidden(e))
+        .filter_map(|e| {
+            let path = e.path().strip_prefix(store_dir).ok()?;
+            let mut s = path.to_string_lossy().into_owned();
+
+            // Apply the transformations similar to `sed`
+            if !s.ends_with(".age") {
+                None
+            } else {
+                s.truncate(s.len() - 4);
+                Some(s)
+            }
+        })
+        .collect();
+
+    results.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
+
+    let mut password_name = String::new();
+    for (i, mp) in menu_programs.iter().enumerate() {
+        let mut child = match Command::new(mp).stdout(Stdio::piped()).stdin(Stdio::piped()).spawn() {
+            Ok(c) => c,
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                if menu_program.is_some() {
+                    return Err(format!("Menu program set to {mp}, but cannot start {mp}!").into());
+                } else if i == menu_programs.len() - 1 {
+                    return Err(format!("Please set a valid menu program! Cannot start any of the following menus: {menu_programs:?}").into());
+                }
+                continue;
+            },
+            Err(e) => return Err(e.into()),
+        };
+        let stdin_writer = child.stdin.as_mut().unwrap();
+        stdin_writer.write_all(results.join("\n").as_bytes())?;
+        let output = child.wait_with_output()?;
+        let output = String::from_utf8_lossy(&output.stdout);
+        password_name = String::from(output.strip_suffix("\n").unwrap());
+        break;
+    }
+
+    let agefile = store_dir.join(format!("{password_name}.age"));
+    let mut content = String::new();
+    decrypt_password(
+        &unlock_identity(&get_identity_file_of_correct_store(
+            &store_dir,
+            &password_name,
+        )?)?,
+        &agefile,
+    )?
+    .read_to_string(&mut content)?;
+
+    for chunk in action_args.chunks(2) {
+        if let [action, arg] = chunk {
+            match action.as_str() {
+                "type-text" => type_string(typing_program, key_delay, arg)?,
+                "sleep" => {
+                    let milliseconds = arg.parse()?;
+                    thread::sleep(time::Duration::from_millis(milliseconds));
+                }
+                _ => {
+                    let value = get_value_from_password_content(&content, arg, &agefile)?;
+                    match action.as_str() {
+                        "clip" => set_clipboard(&value)?,
+                        "type-content" => type_string(typing_program, key_delay, &value)?,
+                        _ => return Err(format!("{action}: No such action. Choose one of [clip, type-content, type-string]!").into()),
+                    }
+                }
+            }
+        } else {
+            let action = &chunk[0];
+            return Err(format!("Please provide an argument for the action {action}!").into());
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
 
     let senior_dir = env::var_os("XDG_DATA_HOME")
         .map_or_else(|| home().join(".local/share/"), PathBuf::from)
@@ -2182,18 +2325,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         ));
     } else {
         for store_arg in &cli.store {
-            if store_arg.to_str().unwrap().contains("*") {
+            if store_arg.contains("*") {
                 let mut no_matches = true;
                 for entry in glob::glob(senior_dir.join(store_arg).to_str().unwrap())? {
                     no_matches = false;
                     store_dirs.insert(entry?);
                 }
                 if no_matches {
-                    return Err(format!(
-                        "Glob pattern `{}` matches no stores!",
-                        store_arg.to_str().unwrap()
-                    )
-                    .into());
+                    return Err(format!("Glob pattern `{}` matches no stores!", store_arg).into());
                 }
             } else {
                 store_dirs.insert(senior_dir.join(store_arg));
@@ -2328,8 +2467,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ref args,
             } => grep_cmd(store_dir, pattern_or_cmd, args)?,
             CliCommand::Cat { ref dirname } => cat(store_dir, dirname)?,
+            //CliCommand::MenuCmd { .. } => todo!(),
+            CliCommand::MenuCmd {
+                ref mut menu_program,
+                ref typing_program,
+                key_delay,
+                ref action_args,
+            } => {
+                menu_cmd(store_dir, menu_program.as_ref().map(|s| s.as_str()), typing_program.as_ref().map(|s| s.as_str()), key_delay, action_args)?;
+            }
         }
-
         if store_i != store_dirs.len() - 1 {
             println!();
         }

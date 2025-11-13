@@ -1,5 +1,3 @@
-use std::ffi::OsString;
-
 use clap::{Parser, Subcommand, builder::ValueHint};
 
 #[derive(Parser, Debug, Clone)]
@@ -9,7 +7,7 @@ pub struct Cli {
     /// Name of the store; default: "main", or the only existing one,
     /// or for `senior clone` the name of the repository
     #[arg(short, long, value_hint = ValueHint::AnyPath)]
-    pub store: Vec<OsString>,
+    pub store: Vec<String>,
 
     #[command(subcommand)]
     pub command: CliCommand,
@@ -87,6 +85,30 @@ pub enum CliCommand {
         name: String,
     },
 
+    /// Launch a menu to select a password and type/clip it
+    #[command(name = "menu")]
+    MenuCmd {
+        #[arg(long)]
+        menu_program: Option<String>,
+
+        #[arg(long)]
+        typing_program: Option<String>,
+
+        #[arg(short = 'd', long, value_name = "MILLISECONDS")]
+        key_delay: Option<u16>,
+
+        //#[command(subcommand, action = clap::ArgAction::Append)]
+        //action_args: SeniormenuArg,
+        #[arg(
+            value_name = "ACTIONS",
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            required = true,
+            help = "[clip <KEY> | type-content <KEY> | type-text <TEXT> | sleep <MILLISECONDS>]..."
+        )]
+        action_args: Vec<String>,
+    },
+
     /// Print the directory of the store
     PrintDir,
 
@@ -135,5 +157,37 @@ pub enum CliCommand {
         /// Useful for scripts
         #[arg(long)]
         check: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum SeniormenuArg {
+    /// Add the value to the clipboard
+    Clip {
+        /// The key that should be clipped;
+        /// "password" clips the first line;
+        /// "otp" generates the one-time password
+        #[arg(index = 1, value_name = "password|otp|user|email|...")]
+        key: String,
+    },
+    /// Type the value
+    TypeContent {
+        /// The key that should be typed;
+        /// "password" clips the first line;
+        /// "otp" generates the one-time password
+        #[arg(index = 1, value_name = "password|otp|user|email|...")]
+        key: String,
+    },
+    /// Type text
+    TypeText {
+        /// The text that should be typed;
+        #[arg(index = 1, value_name = "TEXT")]
+        text: String,
+    },
+    /// Wait
+    Sleep {
+        /// The number of milliseconds to wait
+        #[arg(index = 1, value_name = "MILLISECONDS")]
+        delay: u16,
     },
 }
