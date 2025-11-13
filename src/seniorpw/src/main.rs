@@ -2250,7 +2250,7 @@ fn menu_cmd(
         })
         .collect();
 
-    results.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
+    results.sort_by_key(|a| a.to_uppercase());
 
     let mut password_name = String::new();
     for (i, mp) in menu_programs.iter().enumerate() {
@@ -2282,7 +2282,7 @@ fn menu_cmd(
     let mut content = String::new();
     decrypt_password(
         &unlock_identity(&get_identity_file_of_correct_store(
-            &store_dir,
+            store_dir,
             &password_name,
         )?)?,
         &agefile,
