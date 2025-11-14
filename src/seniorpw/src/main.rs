@@ -19,9 +19,8 @@ use senior::{get_socket_name, geteuid};
 
 use age::secrecy::{ExposeSecret, SecretString};
 use age::{self, ssh};
-use atty::Stream;
 use clap::Parser;
-use interprocess::local_socket::{self, prelude::*};
+use interprocess::local_socket::{self, ListenerOptions, prelude::*};
 use sysinfo::System;
 use tempfile::TempDir;
 use walkdir::WalkDir;
@@ -88,7 +87,7 @@ fn get_display_server() -> DisplayServer {
     DisplayServer::Windows
 }
 
-// Converts the path of an identity file to the key used for senior-agent. Most importantly this
+// Converts the path of an identity file to the key used for `senior agent`. Most importantly this
 // resolves symbolic links which allows multiple stores to use the same identity without the agent
 // unlocking "both"
 fn agent_key_from_identity_file(identity_file: &Path) -> Result<String, Box<dyn Error>> {
@@ -134,7 +133,7 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
         passphrase: &str,
     ) -> Result<(), Box<dyn Error>> {
         let agent_is_running = System::new_all()
-            .processes_by_exact_name(OsStr::new("senior-agent"))
+            .processes_by_exact_name(OsStr::new("senior agent"))
             .any(|p| **p.user_id().unwrap() == unsafe { geteuid() });
         let (socket_print_name, socket_name) = get_socket_name();
         let mut once = true;
@@ -146,26 +145,27 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
                             || e.kind() == io::ErrorKind::NotFound) =>
                 {
                     if agent_is_running {
-                        return Err(format!("senior-agent is running, but no socket connection could be established: {e}").into());
+                        return Err(format!("`senior agent` is running, but no socket connection could be established: {e}").into());
                     }
-                    // Try once to start senior-agent
+                    // Try once to start `senior agent`
                     once = false;
                     // Remove zombie socket file
                     let socket_path = PathBuf::from(&socket_print_name);
                     if socket_path.exists() {
                         eprintln!(
-                            "senior-agent is not running, but {} exists. Deleting zombie socket file...",
+                            "`senior agent` is not running, but {} exists. Deleting zombie socket file...",
                             socket_path.display()
                         );
                         std::fs::remove_file(&socket_path)?;
                     }
-                    let child = match Command::new("senior-agent")
+                    let child = match Command::new("senior")
+                        .arg("agent")
                         .stdin(Stdio::null())
                         .stdout(Stdio::piped())
                         .spawn()
                     {
                         Err(e) if e.kind() == ErrorKind::NotFound => {
-                            eprintln!("Warning: Cannot find senior-agent!");
+                            eprintln!("Warning: Cannot find senior binary for `senior agent`!");
                             return Ok(());
                         }
                         Err(e) => return Err(e.into()),
@@ -177,7 +177,7 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
                     if child_stdout.starts_with("Ready") {
                         continue;
                     } else {
-                        return Err(format!("senior-agent: {}", &child_stdout).into());
+                        return Err(format!("senior agent: {}", &child_stdout).into());
                     }
                 }
                 x => break x?,
@@ -195,7 +195,7 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
         Ok(())
     }
     if let Err(e) = agent_set_passphrase_helper(identity_file, passphrase) {
-        eprintln!("Could not save passphrase to senior-agent: {e}");
+        eprintln!("Could not save passphrase to `senior agent`: {e}");
     }
 }
 
@@ -236,7 +236,7 @@ fn prompt_password(prompt: &str) -> Result<String, Box<dyn Error>> {
         }
     }
 
-    if atty::is(Stream::Stdout) {
+    if atty::is(atty::Stream::Stdout) {
         Ok(rpassword::prompt_password(format!("{prompt}: "))?)
     } else {
         // People are used to pass and gnupg; Get their preferred pinentry program from their
@@ -296,7 +296,7 @@ fn get_or_ask_passphrase(
     Ok(if *try_counter == 1 {
         match agent_get_passphrase(identity_file) {
             Err(e) => {
-                eprintln!("Unexpected error with socket of senior-agent: {e}");
+                eprintln!("Unexpected error with socket of `senior agent`: {e}");
                 (prompt_password(&prompt)?, false)
             }
             Ok(None) => (prompt_password(&prompt)?, false),
@@ -817,7 +817,7 @@ fn unlock(identity_file: &Path, check: bool) -> Result<(), Box<dyn Error>> {
         }
         match agent_get_passphrase(identity_file)? {
             None => Err(format!(
-                "The identity file {} is not cached by senior-agent!",
+                "The identity file {} is not cached by `senior agent`!",
                 identity_file.canonicalize()?.display()
             )
             .into()),
@@ -2320,6 +2320,114 @@ fn menu_cmd(
     Ok(())
 }
 
+fn agent(default_cache_ttl: u64) -> Result<(), Box<dyn Error>> {
+    fn handle_error(conn: io::Result<local_socket::Stream>) -> Option<local_socket::Stream> {
+        match conn {
+            Ok(c) => Some(c),
+            Err(e) => {
+                eprintln!("Incoming connection failed: {e}");
+                None
+            }
+        }
+    }
+
+    let (print_name, name) = get_socket_name();
+
+    let opts = ListenerOptions::new().name(name);
+    let listener = match opts.create_sync() {
+        Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
+            eprintln!(
+                "\
+    Error: Could not start server because the socket file is occupied. Please check if {print_name} is in \
+    use by another process and try again."
+            );
+            return Err(e.into());
+        }
+        x => x?,
+    };
+
+    let mut passphrases = HashMap::<String, (String, Instant)>::new();
+    let mut buffer = String::with_capacity(1024);
+
+    println!("Ready for connections!");
+
+    for conn in listener.incoming().filter_map(handle_error) {
+        buffer.clear();
+        let mut conn = BufReader::new(conn);
+
+        match conn.read_line(&mut buffer) {
+            Ok(0) => {
+                println!("Read EOF. Closing.");
+                break;
+            }
+            Err(e) => {
+                eprintln!("Error: {e}");
+                continue;
+            }
+            Ok(_) => {}
+        }
+
+        // Remove trailing newline
+        buffer.pop();
+
+        let mut conn = conn.get_mut();
+        match &buffer[0..1] {
+            "r" => {
+                // read
+                let key = &buffer[2..];
+                match passphrases.get_mut(key) {
+                    Some((passphrase, last_access)) => {
+                        if default_cache_ttl == 0
+                            || Instant::now().duration_since(*last_access).as_secs()
+                                < default_cache_ttl
+                        {
+                            *last_access = Instant::now();
+                            writeln!(&mut conn, "o: {}", passphrase)?;
+                        } else {
+                            writeln!(&mut conn, "e: Key {key} has expired!")?;
+                            passphrases.remove(key);
+                        }
+                    }
+                    None => {
+                        writeln!(&mut conn, "e: Key {key} is not present!")?;
+                    }
+                }
+            }
+            "w" => {
+                // write
+                // the first space determines the split between key and passphrase
+                // spaces in the key must be escaped with a backslash
+                let mut prev_char_was_backslash = false;
+                let mut separator_index = 0;
+                for (i, c) in buffer[2..].char_indices() {
+                    if c == ' ' && !prev_char_was_backslash {
+                        separator_index = i;
+                        break;
+                    } else {
+                        prev_char_was_backslash = c == '\\';
+                    }
+                }
+                let key = buffer[2..(separator_index + 2)].to_owned();
+                let pass = buffer[(separator_index + 3)..].to_owned();
+                passphrases.insert(key, (pass, Instant::now()));
+            }
+            "d" => {
+                // delete
+                let key = &buffer[2..];
+                match passphrases.remove(key) {
+                    Some(_) => writeln!(&mut conn, "o: Removed {}", &key)?,
+                    None => writeln!(&mut conn, "e: Key {key} is not present!")?,
+                }
+            }
+            _ => {
+                writeln!(&mut conn, "e: Command not implemented!")?;
+                continue;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let mut cli = Cli::parse();
 
@@ -2501,6 +2609,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     key_delay,
                     action_args,
                 )?;
+            }
+            CliCommand::Agent { default_cache_ttl } => {
+                agent(default_cache_ttl)?;
             }
         }
         if store_i != store_dirs.len() - 1 {

@@ -94,7 +94,6 @@ build:
       for TARGETTRIPLE in $TARGETTRIPLES; do
         cargo build --release --target="$TARGETTRIPLE"
         mv target/$TARGETTRIPLE/release/senior ../../bin/senior-$PKG_VERSION-$TARGETTRIPLE
-        mv target/$TARGETTRIPLE/release/senior-agent ../../bin/senior-agent-$PKG_VERSION-$TARGETTRIPLE
       done
     - ls -la ../../bin/
   artifacts:
@@ -130,8 +129,7 @@ release:
     - |
       for TARGETTRIPLE in $TARGETTRIPLES; do
         SENIOR_BIN="senior-$PKG_VERSION-$TARGETTRIPLE"
-        SENIOR_AGENT_BIN="senior-agent-$PKG_VERSION-$TARGETTRIPLE"
-        for ASSETFILE in "$SENIOR_BIN" "$SENIOR_AGENT_BIN"; do
+        for ASSETFILE in "$SENIOR_BIN"; do
           export ASSETSLINKS="$ASSETSLINKS"' --assets-link {"name":"'"$ASSETFILE"'","url":"'"$UPLOAD_URL/$ASSETFILE"'"}'
         done
       done
@@ -141,6 +139,5 @@ release:
       --name "$PKG_VERSION" \
       --tag-name "$PKG_VERSION" \
       $(printf "%s" "$ASSETSLINKS") \
-      --assets-link "{\"name\":\"seniormenu-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/seniormenu?inline=false\"}" \
       --assets-link "{\"name\":\"senior-zsh-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.zsh?inline=false\"}" \
       --assets-link "{\"name\":\"senior-bash-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.bash?inline=false\"}"

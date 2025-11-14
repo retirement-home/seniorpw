@@ -236,6 +236,13 @@ _arguments "${_arguments_options[@]}" : \
 '--help[Print help]' \
 && ret=0
 ;;
+(agent)
+_arguments "${_arguments_options[@]}" : \
+'--default-cache-ttl=[Passphrase is cleared from the agent after n seconds; The timer is reset each time the passphrase is accessed]:SECONDS: ' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_senior__help_commands" \
@@ -336,6 +343,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(agent)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -367,6 +378,7 @@ _senior_commands() {
 'grep:Search the contents of each password file' \
 'cat:Show the contents of all password files' \
 'unlock:Unlock a store without showing any password' \
+'agent:Start the agent to cache the passphrases for your identity files' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'senior commands' commands "$@"
@@ -375,6 +387,11 @@ _senior_commands() {
 _senior__add-recipient_commands() {
     local commands; commands=()
     _describe -t commands 'senior add-recipient commands' commands "$@"
+}
+(( $+functions[_senior__agent_commands] )) ||
+_senior__agent_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior agent commands' commands "$@"
 }
 (( $+functions[_senior__cat_commands] )) ||
 _senior__cat_commands() {
@@ -424,6 +441,7 @@ _senior__help_commands() {
 'grep:Search the contents of each password file' \
 'cat:Show the contents of all password files' \
 'unlock:Unlock a store without showing any password' \
+'agent:Start the agent to cache the passphrases for your identity files' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'senior help commands' commands "$@"
@@ -432,6 +450,11 @@ _senior__help_commands() {
 _senior__help__add-recipient_commands() {
     local commands; commands=()
     _describe -t commands 'senior help add-recipient commands' commands "$@"
+}
+(( $+functions[_senior__help__agent_commands] )) ||
+_senior__help__agent_commands() {
+    local commands; commands=()
+    _describe -t commands 'senior help agent commands' commands "$@"
 }
 (( $+functions[_senior__help__cat_commands] )) ||
 _senior__help__cat_commands() {

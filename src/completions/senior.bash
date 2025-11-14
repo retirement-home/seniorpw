@@ -83,6 +83,9 @@ _senior() {
             senior,add-recipient)
                 cmd="senior__add__recipient"
                 ;;
+            senior,agent)
+                cmd="senior__agent"
+                ;;
             senior,cat)
                 cmd="senior__cat"
                 ;;
@@ -130,6 +133,9 @@ _senior() {
                 ;;
             senior__help,add-recipient)
                 cmd="senior__help__add__recipient"
+                ;;
+            senior__help,agent)
+                cmd="senior__help__agent"
                 ;;
             senior__help,cat)
                 cmd="senior__help__cat"
@@ -201,7 +207,7 @@ _senior() {
 
     case "${cmd}" in
         senior)
-            opts="-s -h -V --store --help --version init clone edit show mv rm menu print-dir git add-recipient reencrypt change-passphrase grep cat unlock help"
+            opts="-s -h -V --store --help --version init clone edit show mv rm menu print-dir git add-recipient reencrypt change-passphrase grep cat unlock agent help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -227,12 +233,30 @@ _senior() {
             return 0
             ;;
         senior__add__recipient)
-            opts="-h --help <PUBLIC KEY> <ALIAS>"
+            opts="-h --help <PUBLIC_KEY> <ALIAS>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__agent)
+            opts="-h --default-cache-ttl --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --default-cache-ttl)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -302,7 +326,7 @@ _senior() {
             return 0
             ;;
         senior__help)
-            opts="init clone edit show mv rm print-dir git add-recipient reencrypt change-passphrase grep unlock help"
+            opts="init clone edit show mv rm menu print-dir git add-recipient reencrypt change-passphrase grep cat unlock agent help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -316,6 +340,20 @@ _senior() {
             return 0
             ;;
         senior__help__add__recipient)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        senior__help__agent)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -565,14 +603,18 @@ _senior() {
             else
                 case "${prev}" in
                     --typing-program)
-                        opts="ydotool xdotool wtype keyboard <TYPING PROGRAM>"
+                        opts="ydotool xdotool wtype keyboard <TYPING_PROGRAM>"
+						;;
                     -d|--key-delay)
                         opts="100 1000 <MILLISECONDS>"
+						;;
                     --menu-program)
-                        opts="dmenu-wl bemenu rofi dmenu <MENU PROGRAM>"
+                        opts="dmenu-wl bemenu rofi dmenu <MENU_PROGRAM>"
+						;;
                     *)
                         COMPREPLY=()
                         return 0
+						;;
                 esac
             fi
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

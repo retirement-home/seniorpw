@@ -88,15 +88,19 @@ pub enum CliCommand {
     /// Launch a menu to select a password and type/clip it
     #[command(name = "menu")]
     MenuCmd {
-        #[arg(long)]
+        /// The dmenu-like program used to select a password
+        #[arg(long, value_name = "MENU PROGRAM")]
         menu_program: Option<String>,
 
-        #[arg(long)]
+        /// The program that is used to type
+        #[arg(long, value_name = "TYPING PROGRAM")]
         typing_program: Option<String>,
 
+        /// Is passed on to the typing program to set a custom delay between keystrokes
         #[arg(short = 'd', long, value_name = "MILLISECONDS")]
         key_delay: Option<u16>,
 
+        /// Copy or type contents of a password; Can be chained
         //#[command(subcommand, action = clap::ArgAction::Append)]
         //action_args: SeniormenuArg,
         #[arg(
@@ -157,6 +161,14 @@ pub enum CliCommand {
         /// Useful for scripts
         #[arg(long)]
         check: bool,
+    },
+
+    /// Start the agent to cache the passphrases for your identity files
+    Agent {
+        /// Passphrase is cleared from the agent after n seconds;
+        /// The timer is reset each time the passphrase is accessed.
+        #[arg(long, default_value_t = 600, value_name = "SECONDS")]
+        default_cache_ttl: u64,
     },
 }
 

@@ -21,7 +21,7 @@ seniorpw's features are
 - git support
 - Completions for bash and zsh
 - Passphrase protected identities
-- Passphrases only need to be entered once per session and then get cached by `senior-agent`
+- Passphrases only need to be entered once per session and then get cached by `senior agent`
 - A store can be shared among a group (encryption for multiple recipients)
 - Search (grep) inside the passwords
 - No config files
@@ -167,14 +167,14 @@ bindsym $mod+y exec senior menu type-content otp type-text "\n"
 bindsym $mod+t exec senior menu type-content user type-text "\t" type-content password type-text "\n"
 ```
 
-### senior-agent
+### senior agent
 If you have set a passphrase to protect your identity file, then running
 `age -d -i .identity.age example.com.age`
 would require you to enter the passphrase each time.
 Because this is very cumbersome, seniorpw provides an agent.
 
 Upon receiving your passphrase once,
-`senior` starts `senior-agent` to cache your identity.
+`senior` starts `senior agent` to cache your identity.
 This way you only have to enter your passphrase once per session.
 
 ### Search the Password Contents
