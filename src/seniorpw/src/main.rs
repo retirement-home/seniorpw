@@ -1343,6 +1343,12 @@ fn show(
 
     let value =
         get_value_from_password_content(&content, key.map_or("", |s| s.as_str()), &agefile)?;
+
+    let content = match content.strip_suffix("\n") {
+        Some(c) => c,
+        None => &content,
+    };
+
     match key {
         Some(_) => println!("{value}"),
         None => println!("{content}"),
