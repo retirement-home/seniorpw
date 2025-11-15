@@ -221,18 +221,20 @@ fn agent_delete_passphrase(identity_file: &Path) -> Result<bool, Box<dyn Error>>
 }
 
 fn read_gpg_agent_conf(option: &str) -> Result<Option<String>, Box<dyn Error>> {
-    let gnupg_dir =
-        env::var_os("GNUPGHOME").map_or_else(|| home().join(".gnupg"), PathBuf::from);
+    let gnupg_dir = env::var_os("GNUPGHOME").map_or_else(|| home().join(".gnupg"), PathBuf::from);
     let gpgagent_file = gnupg_dir.join("gpg-agent.conf");
     if gpgagent_file.exists() && gpgagent_file.canonicalize()?.is_file() {
         let gpgagent_conf = BufReader::new(File::open(&gpgagent_file)?);
-        Ok(gpgagent_conf.lines()
+        Ok(gpgagent_conf
+            .lines()
             .find(|l| {
                 l.as_ref()
                     .expect(&format!("Cannot read {}!", gpgagent_file.display()))
                     .starts_with(option)
-            }).map(|l| {
-                l.expect(&format!("Cannot read line in {}!", gpgagent_file.display()))[option.len()..]
+            })
+            .map(|l| {
+                l.expect(&format!("Cannot read line in {}!", gpgagent_file.display()))
+                    [option.len()..]
                     .trim()
                     .to_owned()
             }))
@@ -262,7 +264,8 @@ fn prompt_password(prompt: &str) -> Result<String, Box<dyn Error>> {
     } else {
         // People are used to pass and gnupg; Get their preferred pinentry program from their
         // gpg-agent.conf
-        let pinentry_program = read_gpg_agent_conf("pinentry-program")?.unwrap_or(String::from("pinentry"));
+        let pinentry_program =
+            read_gpg_agent_conf("pinentry-program")?.unwrap_or(String::from("pinentry"));
         let child = Command::new(&pinentry_program)
             .stdout(Stdio::piped())
             .stdin(Stdio::piped())
@@ -2332,11 +2335,13 @@ fn agent(default_cache_ttl: Option<u64>) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let default_cache_ttl = default_cache_ttl
-        .unwrap_or_else(|| {
+    let default_cache_ttl = default_cache_ttl.unwrap_or_else(|| {
         read_gpg_agent_conf("default-cache-ttl")
             .expect("Cannot read gpg-agent.conf to get default-cache-ttl setting.")
-            .map(|s| s.parse().expect(&format!("gpg-agent.conf: {s} is not a number!")))
+            .map(|s| {
+                s.parse()
+                    .expect(&format!("gpg-agent.conf: {s} is not a number!"))
+            })
             .unwrap_or(600)
     });
 
