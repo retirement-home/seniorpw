@@ -229,11 +229,11 @@ fn read_gpg_agent_conf(option: &str) -> Result<Option<String>, Box<dyn Error>> {
             .lines()
             .find(|l| {
                 l.as_ref()
-                    .expect(&format!("Cannot read {}!", gpgagent_file.display()))
+                    .unwrap_or_else(|_| panic!("Cannot read {}!", gpgagent_file.display()))
                     .starts_with(option)
             })
             .map(|l| {
-                l.expect(&format!("Cannot read line in {}!", gpgagent_file.display()))
+                l.unwrap_or_else(|_| panic!("Cannot read line in {}!", gpgagent_file.display()))
                     [option.len()..]
                     .trim()
                     .to_owned()
@@ -2340,7 +2340,7 @@ fn agent(default_cache_ttl: Option<u64>) -> Result<(), Box<dyn Error>> {
             .expect("Cannot read gpg-agent.conf to get default-cache-ttl setting.")
             .map(|s| {
                 s.parse()
-                    .expect(&format!("gpg-agent.conf: {s} is not a number!"))
+                    .unwrap_or_else(|_| panic!("gpg-agent.conf: {s} is not a number!"))
             })
             .unwrap_or(600)
     });
