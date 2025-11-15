@@ -165,10 +165,10 @@ pub enum CliCommand {
 
     /// Start the agent to cache the passphrases for your identity files
     Agent {
-        /// Passphrase is cleared from the agent after n seconds;
-        /// The timer is reset each time the passphrase is accessed.
-        #[arg(long, default_value_t = 600, value_name = "SECONDS")]
-        default_cache_ttl: u64,
+        /// Passphrase is cleared from the agent n seconds after the last access;
+        /// default: The setting in your gpg-agent.conf or 600 seconds
+        #[arg(long, value_name = "SECONDS")]
+        default_cache_ttl: Option<u64>,
     },
 }
 

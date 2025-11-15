@@ -238,7 +238,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (agent)
 _arguments "${_arguments_options[@]}" : \
-'--default-cache-ttl=[Passphrase is cleared from the agent after n seconds; The timer is reset each time the passphrase is accessed]:SECONDS: ' \
+'--default-cache-ttl=[Passphrase is cleared from the agent n seconds after the last access; default\: The setting in your gpg-agent.conf or 600 seconds]:SECONDS: ' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
