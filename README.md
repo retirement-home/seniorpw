@@ -45,7 +45,7 @@ To do:
 | [kbs2](https://github.com/woodruffw/kbs2) | age | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | Rust |
 | [pass](https://www.passwordstore.org/) | gpg | ✅ | ✅ gpg-agent | ✅ gpg-agent | ✅ | ❌ | [✅](https://github.com/tadfisher/pass-otp) | ✅ | Bash |
 | [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Go |
-| [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Rust |
+| [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Rust |
 
 ## Usage
 ### Create a New Store

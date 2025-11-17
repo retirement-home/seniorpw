@@ -47,7 +47,7 @@ def main():
     password_managers.append(PasswordManager("passage", "https://github.com/FiloSottile/passage", backend="age", agent="❌", encrypted_identities="✅", git="✅", language="Bash", configless="✅", totp="[✅](https://github.com/tadfisher/pass-otp/pull/178)", agent_timeout="-", key_value_pairs="❌"))
     password_managers.append(PasswordManager("privage", "https://github.com/revelaction/privage", backend="age", agent="-", encrypted_identities="yubikey", git="✅", language="Go", configless="✅", totp="❌", agent_timeout="-", key_value_pairs="❌"))
     password_managers.append(PasswordManager("psswd", "https://github.com/Gogopex/psswd", backend="age", agent="❌", encrypted_identities="❌ scrypt", git="❌", language="Rust", configless="✅", totp="❌", agent_timeout="-", key_value_pairs="❌"))
-    password_managers.append(PasswordManager("seniorpw", "https://gitlab.com/retirement-home/seniorpw", backend="age", agent="✅", encrypted_identities="✅", git="✅", language="Rust", configless="✅", totp="✅", agent_timeout="❌", key_value_pairs="✅"))
+    password_managers.append(PasswordManager("seniorpw", "https://gitlab.com/retirement-home/seniorpw", backend="age", agent="✅", encrypted_identities="✅", git="✅", language="Rust", configless="✅", totp="✅", agent_timeout="✅", key_value_pairs="✅"))
     print(pm_to_table(password_managers))
 
 if __name__ == "__main__":
