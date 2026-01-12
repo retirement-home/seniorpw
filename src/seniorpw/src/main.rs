@@ -497,8 +497,8 @@ fn setup_identity(store_dir: &Path, identity: Option<&String>) -> Result<String,
 }
 
 fn user_at_host() -> String {
-    let mut user_at_host = whoami::username();
-    if let Ok(host) = whoami::fallible::hostname() {
+    let mut user_at_host = whoami::username().unwrap_or("user".to_string());
+    if let Ok(host) = whoami::hostname() {
         user_at_host.push('@');
         user_at_host.push_str(&host);
     }
