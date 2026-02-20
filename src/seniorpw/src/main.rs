@@ -523,11 +523,13 @@ fn init(
         let recipients_dir = store_dir.join(".recipients");
         let recipients_main = recipients_dir.join("main.txt");
         let gitignore = store_dir.join(".gitignore");
-        // TODO: .gitattributes file
+        let gitattributes = store_dir.join(".gitattributes");
 
         fs::create_dir_all(recipients_dir)?;
         let mut gitignore_file = File::create(gitignore)?;
         gitignore_file.write_all(b"/.identity.*\n")?;
+        let mut gitattributes_file = File::create(gitattributes)?;
+        gitattributes_file.write_all(b"*.age diff=age\n")?;
         let mut recipients_main_file = File::create(recipients_main)?;
         write!(recipients_main_file, "# {recipient_alias}\n{pubkey}\n")?;
         println!("Created {}", store_dir.display());
@@ -1275,7 +1277,21 @@ fn show(
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
     let name_dir = store_dir.join(name);
-    let agefile = store_dir.join(format!("{}.age", &name));
+    let agefile = if name.starts_with("/") {
+        // Absolute paths already contain the .age extension.
+        // This is important for git diff
+        PathBuf::from(name)
+    } else if name == "-" {
+        PathBuf::from("/dev/stdin")
+    } else {
+        let extension_added = store_dir.join(format!("{}.age", &name));
+        if !extension_added.exists() && name.ends_with(".age") {
+            // for git diff
+            store_dir.join(name)
+        } else {
+            extension_added
+        }
+    };
 
     if !agefile.exists() {
         // maybe it is just a directory
@@ -1964,7 +1980,13 @@ fn get_identity_file_of_correct_store(
     store_dir: &Path,
     name: &str,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    get_identity_file_from_name_path(store_dir, &store_dir.join(name))
+    let name_path = if name.starts_with("/") {
+        // for absolute paths, use the identity of the store
+        store_dir
+    } else {
+        &store_dir.join(name)
+    };
+    get_identity_file_from_name_path(store_dir, name_path)
 }
 
 struct PasswordIter {
@@ -2592,6 +2614,34 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .args(args)
                     .status()?
                     .exit_ok()?;
+                if args[0] == "init" {
+                    println!("Applying options for git diff...");
+                    let args = [
+                        "git",
+                        "-C",
+                        store_dir.to_str().unwrap(),
+                        "config",
+                        "set",
+                        "diff.age.textconv",
+                        &format!(
+                            "senior -s {} show",
+                            store_dir.file_name().unwrap().display()
+                        ),
+                    ];
+                    println!("{}", format_cmd(&args));
+                    Command::new("git").args(&args[1..]).status()?.exit_ok()?;
+                    let args = [
+                        "git",
+                        "-C",
+                        store_dir.to_str().unwrap(),
+                        "config",
+                        "set",
+                        "diff.age.binary",
+                        "true",
+                    ];
+                    println!("{}", format_cmd(&args));
+                    Command::new("git").args(&args[1..]).status()?.exit_ok()?;
+                }
             }
             CliCommand::AddRecipient {
                 ref public_key,
