@@ -622,6 +622,35 @@ fn format_cmd(cmd: &[&str]) -> String {
     s
 }
 
+fn git_set_textconv_options(store_dir: &Path) -> Result<(), Box<dyn Error>> {
+    println!("Applying options for git diff...");
+    let args = [
+        "git",
+        "-C",
+        store_dir.to_str().unwrap(),
+        "config",
+        "set",
+        "diff.age.textconv",
+        &format!(
+            "senior -s {} show",
+            store_dir.file_name().unwrap().display()
+        ),
+    ];
+    println!("{}", format_cmd(&args));
+    Command::new("git").args(&args[1..]).status()?.exit_ok()?;
+    let args = [
+        "git",
+        "-C",
+        store_dir.to_str().unwrap(),
+        "config",
+        "set",
+        "diff.age.binary",
+        "true",
+    ];
+    println!("{}", format_cmd(&args));
+    Command::new("git").args(&args[1..]).status()?.exit_ok()
+}
+
 fn git_clone(
     store_dir: &Path,
     identity: Option<&String>,
@@ -638,6 +667,8 @@ fn git_clone(
             .status()?
             .exit_ok()?;
         let pubkey = setup_identity(store_dir, identity)?;
+
+        git_set_textconv_options(store_dir)?;
 
         if identity.is_some()
             && let Some(filepos) =
@@ -2615,32 +2646,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .status()?
                     .exit_ok()?;
                 if args[0] == "init" {
-                    println!("Applying options for git diff...");
-                    let args = [
-                        "git",
-                        "-C",
-                        store_dir.to_str().unwrap(),
-                        "config",
-                        "set",
-                        "diff.age.textconv",
-                        &format!(
-                            "senior -s {} show",
-                            store_dir.file_name().unwrap().display()
-                        ),
-                    ];
-                    println!("{}", format_cmd(&args));
-                    Command::new("git").args(&args[1..]).status()?.exit_ok()?;
-                    let args = [
-                        "git",
-                        "-C",
-                        store_dir.to_str().unwrap(),
-                        "config",
-                        "set",
-                        "diff.age.binary",
-                        "true",
-                    ];
-                    println!("{}", format_cmd(&args));
-                    Command::new("git").args(&args[1..]).status()?.exit_ok()?;
+                    git_set_textconv_options(store_dir)?;
                 }
             }
             CliCommand::AddRecipient {
