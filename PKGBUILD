@@ -1,6 +1,6 @@
 # Maintainer: Stefan <stefan@gehr.xyz>
-pkgname=seniorpw
-replaces=(senior)
+_name=seniorpw
+pkgname="${_name}"-git
 pkgver=r203.77aa38a
 pkgrel=1
 pkgdesc='password manager using age as backend; inspired by pass'
@@ -15,18 +15,18 @@ md5sums=('SKIP')
 _rustdir="src/seniorpw"
 
 pkgver() {
-	cd "$pkgname"
+	cd "$_name"
 	printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 build() {
-	cd "$pkgname/$_rustdir"
+	cd "$_name/$_rustdir"
 	cargo build --bins --locked --release --target-dir target
 }
 
 package() {
-	cd "$pkgname"
-	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+	cd "$_name"
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$_name/LICENSE"
 	install -Dm755 $_rustdir/target/release/senior -t "$pkgdir"/usr/bin/
 	install -Dm644 src/completions/senior.zsh "$pkgdir"/usr/share/zsh/site-functions/_senior
 	install -Dm644 src/completions/senior.bash "$pkgdir"/usr/share/bash-completion/completions/senior
