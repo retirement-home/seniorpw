@@ -61,10 +61,19 @@ fn main() -> Result<()> {
     .expect("Failed to generate Zsh completion");
 
     println!("cargo:warning=Generated zsh completion: {zsh_path:?}");
+    
+    // in nix, we can only write to the outdir (everything else is chmodded)
+    // in PKGBUILD, using out dir is problematic because there could be multiple
+    // outdirs from prior builds. allow the user to choose whether to use a fixed
+    // path outside of outdir or one inside of outdir
+    let mandir = if env::var_os("SENIORPW_ALT_MANDIR").is_some() {
+        std::path::PathBuf::from(outdir).join("man")
+    } else {
+        std::path::PathBuf::from("../man")
+    };
 
-    let out_dir = std::path::PathBuf::from("../man");
-    generate_manpages(&out_dir)?;
-    println!("cargo:warning=Generated manpages in ../man/");
+    generate_manpages(&mandir)?;
+    println!("cargo:warning=Generated manpages in {mandir:?}");
 
     Ok(())
 }
