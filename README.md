@@ -203,6 +203,22 @@ senior cat [dirname] | grep -C 5 -i -n <REGEX PATTERN>
 ```
 
 ## Install
+### Flake BASED Systems
+Add the input
+```nix
+seniorpw = {
+    url = "git+https://gitlab.com/retirement-home/seniorpw";
+    inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+Then use it e. g. like this
+```nix
+environment.systemPackages = [
+    inputs.seniorpw.seniorpw
+];
+```
+
 ### Arch BASED Systems
 Simply use the provided [PKGBUILD](PKGBUILD).
 ```sh
