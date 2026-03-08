@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     .expect("Failed to generate Zsh completion");
 
     println!("cargo:warning=Generated zsh completion: {zsh_path:?}");
-    
+
     // in nix, we can only write to the outdir (everything else is chmodded)
     // in PKGBUILD, using out dir is problematic because there could be multiple
     // outdirs from prior builds. allow the user to choose whether to use a fixed
