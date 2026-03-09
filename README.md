@@ -206,7 +206,7 @@ senior cat [dirname] | grep -C 5 -i -n <REGEX PATTERN>
 ### Arch BASED Systems
 Install the [seniorpw-git AUR package](https://aur.archlinux.org/packages/seniorpw-git).
 ```sh
-aura -Syu seniorpw-git
+aura -A seniorpw-git
 ```
 
 ### Flake BASED Systems
