@@ -59,6 +59,8 @@ def main():
             f.write("{}\n".format(public_key))
         with open(os.path.join(target_dir, ".gitignore"), "w") as f:
             f.write("/.identity.*\n")
+        with open(os.path.join(target_dir, ".gitattributes"), "w") as f:
+            f.write("*.age diff=age\n")
 
     with open(csv_file, newline="") as f:
         csv_reader = csv.reader(f)

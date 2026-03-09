@@ -61,6 +61,8 @@ def main():
             f.write("{}\n".format(public_key))
         with open(os.path.join(target_dir, ".gitignore"), "w") as f:
             f.write("/.identity.*\n")
+        with open(os.path.join(target_dir, ".gitattributes"), "w") as f:
+            f.write("*.age diff=age\n")
 
     def copy_and_encrypt(dir_path):
         for filename in os.listdir(dir_path):
