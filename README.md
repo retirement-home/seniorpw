@@ -18,7 +18,7 @@ seniorpw's features are
 - OTP support
 - Clipboard support for [Linux](https://kernel.org/) ([Wayland](https://wayland.freedesktop.org/) and [X11](https://www.x.org/wiki/)), [Termux](https://termux.dev/en/), [WSL](https://learn.microsoft.com/en-us/windows/wsl/about), [Darwin](https://opensource.apple.com/) ([macOS](https://www.apple.com/macos/))
 - Select and automatically copy or type a password via `senior menu`
-- git support
+- git support (including `git diff`)
 - Completions for bash and zsh
 - Passphrase protected identities
 - Passphrases only need to be entered once per session and then get cached by `senior agent`
@@ -203,6 +203,12 @@ senior cat [dirname] | grep -C 5 -i -n <REGEX PATTERN>
 ```
 
 ## Install
+### Arch BASED Systems
+Install the [seniorpw-git AUR package](https://aur.archlinux.org/packages/seniorpw-git).
+```sh
+aura -Syu seniorpw-git
+```
+
 ### Flake BASED Systems
 Add the input
 ```nix
@@ -217,15 +223,6 @@ Then use it e. g. like this
 environment.systemPackages = [
     inputs.seniorpw.seniorpw
 ];
-```
-
-### Arch BASED Systems
-Simply use the provided [PKGBUILD](PKGBUILD).
-```sh
-# Download the PKGBUILD into an empty directory
-curl -LO "https://gitlab.com/retirement-home/senior/-/raw/main/PKGBUILD"
-# Install the package with all its dependencies
-makepkg -sic
 ```
 
 ### Other Systems
