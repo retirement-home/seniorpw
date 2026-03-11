@@ -221,7 +221,7 @@ seniorpw = {
 Then use it e. g. like this
 ```nix
 environment.systemPackages = [
-    inputs.seniorpw.seniorpw
+    inputs.seniorpw.packages.${system}.seniorpw
 ];
 ```
 
