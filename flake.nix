@@ -47,8 +47,8 @@
           meta = {
             description = "Password manager using age as backend; inspired by pass";
             homepage = "https://gitlab.com/retirement-home/seniorpw";
-            # TODO: clear up the license
             license = pkgs.lib.licenses.agpl3Plus;
+            mainProgram = "senior";
           };
 
           SENIORPW_ALT_MANDIR = "1";
