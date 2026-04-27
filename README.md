@@ -44,7 +44,7 @@ To do:
 | [passage](https://github.com/FiloSottile/passage) | age | ✅ | ❌ | - | ✅ | ❌ | [✅](https://github.com/tadfisher/pass-otp/pull/178) | ✅ | Bash |
 | [kbs2](https://github.com/woodruffw/kbs2) | age | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | Rust |
 | [pass](https://www.passwordstore.org/) | gpg | ✅ | ✅ gpg-agent | ✅ gpg-agent | ✅ | ❌ | [✅](https://github.com/tadfisher/pass-otp) | ✅ | Bash |
-| [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Go |
+| [pago](https://github.com/dbohdan/pago) | age | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Go |
 | [seniorpw](https://gitlab.com/retirement-home/seniorpw) | age | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Rust |
 
 ## Usage
