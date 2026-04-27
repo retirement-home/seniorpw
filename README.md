@@ -237,7 +237,6 @@ sudo make install
 sudo make uninstall
 ```
 On Termux you should omit the `sudo`.
-Make sure you have the dependencies installed (look at `depends` and `makedepends` in the [PKGBUILD](PKGBUILD)).
 
 ## Import From Another Password Manager
 ### [pass](https://git.zx2c4.com/password-store/)
