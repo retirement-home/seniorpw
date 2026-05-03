@@ -1246,7 +1246,7 @@ fn set_clipboard(value: &str) -> Result<(), Box<dyn Error>> {
     // TODO: support Windows
     match get_display_server() {
         DisplayServer::Wayland => {
-            match Command::new("wl-copy").args(["-o", value]).status() {
+            match Command::new("wl-copy").args(["-o", "--sensitive", value]).status() {
                 Err(e) if e.kind() == ErrorKind::NotFound => Err("Using Wayland, but cannot run wl-copy! Please install wl-clipboard!".into()),
                 Err(e) => Err(e.into()),
                 Ok(s) => s.exit_ok(),
