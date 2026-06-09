@@ -1458,7 +1458,8 @@ fn move_name(
         new_path = new_path_file;
     }
 
-    if old_path.canonicalize()? == canonicalise(&new_path)? {
+    let old_path_canonicalized = old_path.canonicalize()?;
+    if old_path_canonicalized == canonicalise(&new_path)? {
         return Err(format!(
             "Source {} and destination {} are identical!",
             old_path.display(),
@@ -1479,7 +1480,7 @@ fn move_name(
     }
 
     fs::rename(&old_path, &new_path)?;
-    removedirs(old_path.parent().unwrap())?;
+    removedirs(old_path_canonicalized.parent().unwrap())?;
 
     // git add/commit
     if check_for_git(canon_store_dir) {
