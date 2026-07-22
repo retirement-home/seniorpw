@@ -1008,8 +1008,7 @@ impl Iterator for RecipientStrIter {
                     None => break None,
                     Some((i, line)) => {
                         let filepos = format!("{}:{}", self.cur_file.display(), i + 1);
-                        let line =
-                            line.unwrap_or_else(|_| panic!("Cannot read line {}!", filepos));
+                        let line = line.unwrap_or_else(|_| panic!("Cannot read line {}!", filepos));
                         if line.trim_start().starts_with('#') || line.trim().is_empty() {
                             continue;
                         }
