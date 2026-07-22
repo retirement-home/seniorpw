@@ -177,7 +177,7 @@ fn agent_set_passphrase(identity_file: &Path, passphrase: &str) {
                     if child_stdout.starts_with("Ready") {
                         continue;
                     } else {
-                        return Err(format!("senior agent: {}", &child_stdout).into());
+                        return Err(format!("senior agent: {}", child_stdout).into());
                     }
                 }
                 x => break x?,
@@ -255,7 +255,7 @@ fn prompt_password(prompt: &str) -> Result<String, Box<dyn Error>> {
             Ok(())
         } else {
             buffer.pop();
-            Err(format!("{}: {}", pinentry_program, &buffer).into())
+            Err(format!("{}: {}", pinentry_program, buffer).into())
         }
     }
 
@@ -372,7 +372,7 @@ fn setup_identity(store_dir: &Path, identity: Option<&String>) -> Result<String,
                 "# created: {}",
                 chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
             )?;
-            writeln!(write_to, "# public key: {}", &pubkey)?;
+            writeln!(write_to, "# public key: {}", pubkey)?;
             writeln!(write_to, "{}", key.to_string().expose_secret())?;
             if let Some(stream_writer) = encryptor_writer {
                 stream_writer.finish()?;
@@ -1009,7 +1009,7 @@ impl Iterator for RecipientStrIter {
                     Some((i, line)) => {
                         let filepos = format!("{}:{}", self.cur_file.display(), i + 1);
                         let line =
-                            line.unwrap_or_else(|_| panic!("Cannot read line {}!", &filepos));
+                            line.unwrap_or_else(|_| panic!("Cannot read line {}!", filepos));
                         if line.trim_start().starts_with('#') || line.trim().is_empty() {
                             continue;
                         }
@@ -1315,7 +1315,7 @@ fn show(
     } else if name == "-" {
         PathBuf::from("/dev/stdin")
     } else {
-        let extension_added = store_dir.join(format!("{}.age", &name));
+        let extension_added = store_dir.join(format!("{}.age", name));
         if !extension_added.exists() && name.ends_with(".age") {
             // for git diff
             store_dir.join(name)
@@ -1438,8 +1438,8 @@ fn move_name(
     let canon_store_dir = identity_file.parent().unwrap();
     let mut old_path = store_dir.join(old_name);
     let mut new_path = store_dir.join(new_name);
-    let old_path_file = store_dir.join(format!("{}.age", &old_name));
-    let new_path_file = store_dir.join(format!("{}.age", &new_name));
+    let old_path_file = store_dir.join(format!("{}.age", old_name));
+    let new_path_file = store_dir.join(format!("{}.age", new_name));
     // for git later
     let old_canon_name = canonicalise(&store_dir.join(old_name))?;
     let new_canon_name = canonicalise(&store_dir.join(new_name))?;
@@ -1516,7 +1516,7 @@ fn remove(
 ) -> Result<(), Box<dyn Error>> {
     let canon_store_dir = identity_file.parent().unwrap();
     let mut path = store_dir.join(name);
-    let path_file = store_dir.join(format!("{}.age", &name));
+    let path_file = store_dir.join(format!("{}.age", name));
     // for git later
     let canon_name = canonicalise(&store_dir.join(name))?;
 
@@ -1655,7 +1655,7 @@ fn add_recipient(
         .create(true)
         .append(true)
         .open(&recipients_file)?;
-    write!(recipients_file_handle, "# {}\n{}\n", &alias, &public_key)?;
+    write!(recipients_file_handle, "# {}\n{}\n", alias, public_key)?;
 
     if reencrypt(identity_file)? {
         let canon_store_dir = identity_file.parent().unwrap();
@@ -1666,7 +1666,7 @@ fn add_recipient(
             .arg(&recipients_file)
             .status()?
             .exit_ok()?;
-        let message = format!("Reencrypted store for {}", &alias);
+        let message = format!("Reencrypted store for {}", alias);
         git_commit(canon_store_dir, &message)?;
     }
     Ok(())
@@ -1891,13 +1891,13 @@ fn git_remote_is_ahead(store_dir: &Path) -> bool {
         .args(["merge-base", "--is-ancestor"])
         .args([git_remote, git_local])
         .status()
-        .unwrap_or_else(|_| panic!("Cannot run `{}`!", &merge_base_cmd_str))
+        .unwrap_or_else(|_| panic!("Cannot run `{}`!", merge_base_cmd_str))
         .code()
         .unwrap()
     {
         0 => false,
         1 => true,
-        _ => panic!("Error in `{}`!", &merge_base_cmd_str),
+        _ => panic!("Error in `{}`!", merge_base_cmd_str),
     }
 }
 
@@ -2483,7 +2483,7 @@ fn agent(default_cache_ttl: Option<u64>) -> Result<(), Box<dyn Error>> {
                 // delete
                 let key = &buffer[2..];
                 match passphrases.remove(key) {
-                    Some(_) => writeln!(&mut conn, "o: Removed {}", &key)?,
+                    Some(_) => writeln!(&mut conn, "o: Removed {}", key)?,
                     None => writeln!(&mut conn, "e: Key {key} is not present!")?,
                 }
             }
