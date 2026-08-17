@@ -746,7 +746,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
                 age::IdentityFile::from_file(identity_file.to_str().unwrap().to_owned())?
                     .into_identities()?;
             for identity in identities_native {
-                identities.push(identity);
+                identities.push(identity as Box<dyn age::Identity>);
             }
         }
         "age" => loop {
@@ -761,9 +761,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             let (pass, pass_is_from_agent) =
                 get_or_ask_passphrase(identity_file, &mut try_counter)?;
             if pass_is_from_agent {
-                identities.push(
-                    Box::new(age::x25519::Identity::from_str(&pass)?) as Box<dyn age::Identity>
-                );
+                identities.push(Box::new(age::x25519::Identity::from_str(&pass)?));
                 break;
             }
 
@@ -781,7 +779,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             reader.read_to_string(&mut identity_str)?;
             let identity = age_identity_from_keyfile_content(&identity_str)?;
             agent_set_passphrase(identity_file, identity.to_string().expose_secret());
-            identities.push(Box::new(identity) as Box<dyn age::Identity>);
+            identities.push(Box::new(identity));
             break;
         },
         "ssh" => {
@@ -817,7 +815,7 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
                     .into());
                 }
             };
-            identities.push(Box::new(ssh::Identity::from(identity)) as Box<dyn age::Identity>);
+            identities.push(Box::new(ssh::Identity::from(identity)));
         }
         _ => panic!(
             "Identity file with name {} not supported!",
