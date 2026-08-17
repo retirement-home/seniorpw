@@ -288,16 +288,17 @@ fn prompt_password(prompt: &str) -> Result<String, Box<dyn Error>> {
 }
 
 // return value: second value in tuple is whether the agent was used
+// ask_agent gets set to false
 fn get_or_ask_passphrase(
     identity_file: &Path,
-    try_counter: &mut u32,
+    ask_agent: &mut bool,
 ) -> Result<(String, bool), Box<dyn Error>> {
     let prompt = format!(
         "Enter passphrase to unlock {}",
         identity_file.canonicalize()?.display()
     );
-    *try_counter += 1;
-    Ok(if *try_counter == 1 {
+    Ok(if *ask_agent {
+        *ask_agent = false;
         match agent_get_passphrase(identity_file) {
             Err(e) => {
                 eprintln!("Unexpected error with socket of `senior agent`: {e}");
@@ -738,9 +739,14 @@ fn canonicalise(path: &Path) -> std::io::Result<PathBuf> {
     canonicalise_helper(&canonicalise_helper(path)?)
 }
 
-fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, Box<dyn Error>> {
+type UnlockedIdentity = (Vec<Box<dyn age::Identity>>, bool);
+fn unlock_identity(
+    identity_file: &Path,
+    allow_asking_agent: bool,
+) -> Result<UnlockedIdentity, Box<dyn Error>> {
     let mut identities = vec![];
-    let mut try_counter = 0;
+    let mut identity_is_from_agent = false;
+    let mut allow_asking_agent_mut = allow_asking_agent;
     match identity_file.extension().unwrap().to_str().unwrap() {
         "txt" => {
             // clear text identity
@@ -760,9 +766,9 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
 
             // for .identity.age the agent saves the string representation of the decrypted
             // identity, instead of the passphrase; this is done for faster decryption
-            let (pass, pass_is_from_agent) =
-                get_or_ask_passphrase(identity_file, &mut try_counter)?;
-            if pass_is_from_agent {
+            let (pass, pifa) = get_or_ask_passphrase(identity_file, &mut allow_asking_agent_mut)?;
+            identity_is_from_agent = pifa;
+            if identity_is_from_agent {
                 identities.push(Box::new(age::x25519::Identity::from_str(&pass)?));
                 break;
             }
@@ -792,11 +798,12 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
                 Some(identity_file.to_str().unwrap().to_owned()),
             )? {
                 ssh::Identity::Encrypted(k) => loop {
-                    let (pass, pass_is_from_agent) =
-                        get_or_ask_passphrase(identity_file, &mut try_counter)?;
+                    let (pass, pifa) =
+                        get_or_ask_passphrase(identity_file, &mut allow_asking_agent_mut)?;
+                    identity_is_from_agent = pifa;
                     match k.decrypt(SecretString::from(pass.clone())) {
                         Ok(k) => {
-                            if !pass_is_from_agent {
+                            if !identity_is_from_agent {
                                 agent_set_passphrase(identity_file, &pass);
                             }
                             break k;
@@ -825,14 +832,28 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             identity_file.file_name().unwrap().to_str().unwrap()
         ),
     };
-    Ok(identities)
+    Ok((identities, identity_is_from_agent))
 }
 
-// decrypts agefile and returns the reader
+// decrypt agefile and return the reader
+// if force_unlock_identity_file then the agent is bypassed and the user will be prompted to enter
+// the passphrase
 fn decrypt_password(
-    identities: &[Box<dyn age::Identity>],
     agefile: &Path,
+    identity_file: &Path,
+    identities: &mut Vec<Box<dyn age::Identity>>,
+    identities_are_from_agent: bool,
+    force_unlock_identity_file: bool,
 ) -> Result<age::stream::StreamReader<File>, Box<dyn Error>> {
+    let current_identities_are_from_agent = if identities.is_empty() || force_unlock_identity_file {
+        let (mut new_identities, identity_is_from_agent) =
+            unlock_identity(identity_file, !force_unlock_identity_file)?;
+        identities.append(&mut new_identities);
+        identity_is_from_agent
+    } else {
+        // identities were already supplied and we were not forced to unlock file
+        identities_are_from_agent
+    };
     let password_decryptor = age::Decryptor::new(File::open(agefile)?)?;
     if password_decryptor.is_scrypt() {
         return Err(format!(
@@ -842,7 +863,27 @@ fn decrypt_password(
         .into());
     }
 
-    Ok(password_decryptor.decrypt(identities.iter().map(|i| i.as_ref()))?)
+    match password_decryptor.decrypt(identities.iter().map(|i| i.as_ref())) {
+        Ok(r) => Ok(r),
+        Err(age::DecryptError::NoMatchingKeys) => {
+            if current_identities_are_from_agent {
+                // maybe the agent stored an old identity ==> try again and enforce file unlocking
+                decrypt_password(agefile, identity_file, identities, true, true)
+            } else {
+                Err(age::DecryptError::NoMatchingKeys.into())
+            }
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+// decrypt agefile and return the reader
+fn decrypt_password_simple(
+    agefile: &Path,
+    identity_file: &Path,
+) -> Result<age::stream::StreamReader<File>, Box<dyn Error>> {
+    let mut identities = vec![];
+    decrypt_password(agefile, identity_file, &mut identities, false, false)
 }
 
 fn unlock(identity_file: &Path, check: bool) -> Result<(), Box<dyn Error>> {
@@ -862,7 +903,7 @@ fn unlock(identity_file: &Path, check: bool) -> Result<(), Box<dyn Error>> {
             Some(_) => Ok(()),
         }
     } else {
-        unlock_identity(identity_file)?;
+        unlock_identity(identity_file, true)?;
         Ok(())
     }
 }
@@ -1059,7 +1100,7 @@ fn edit(identity_file: &Path, store_dir: &Path, name: &str) -> Result<(), Box<dy
 
     // decrypt if it exists
     let old_content = if agefile.is_file() {
-        let mut reader = decrypt_password(&unlock_identity(identity_file)?, &agefile)?;
+        let mut reader = decrypt_password_simple(&agefile, identity_file)?;
         let mut old_content = vec![];
         reader.read_to_end(&mut old_content)?;
         File::create(&tmpfile_txt)?.write_all(&old_content)?;
@@ -1349,7 +1390,7 @@ fn show(
     }
 
     let mut content = String::new();
-    decrypt_password(&unlock_identity(identity_file)?, &agefile)?.read_to_string(&mut content)?;
+    decrypt_password_simple(&agefile, identity_file)?.read_to_string(&mut content)?;
 
     let value =
         get_value_from_password_content(&content, key.map_or("", |s| s.as_str()), &agefile)?;
@@ -1518,7 +1559,9 @@ fn remove(
 // returns whether git is used
 fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
     fn reencrypt_recursive(
-        identities: &[Box<dyn age::Identity>],
+        identities: &mut Vec<Box<dyn age::Identity>>,
+        identity_file: &Path,
+        identities_are_from_agent: bool,
         recipients: &[Box<dyn age::Recipient>],
         cur_dir: &Path,
         collect: &mut Vec<PathBuf>,
@@ -1536,14 +1579,28 @@ fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
             let filetype = entry.file_type().unwrap();
             let entry_path = entry.path();
             if filetype.is_dir() {
-                reencrypt_recursive(identities, recipients, &entry_path, collect)?;
+                reencrypt_recursive(
+                    identities,
+                    identity_file,
+                    identities_are_from_agent,
+                    recipients,
+                    &entry_path,
+                    collect,
+                )?;
                 continue;
             } else if !filetype.is_file() || entry_path.extension() != Some(OsStr::new("age")) {
                 continue;
             }
 
             let mut content = vec![];
-            decrypt_password(identities, &entry_path)?.read_to_end(&mut content)?;
+            decrypt_password(
+                &entry_path,
+                identity_file,
+                identities,
+                identities_are_from_agent,
+                false,
+            )?
+            .read_to_end(&mut content)?;
             encrypt_password(recipients, &content[..], &entry_path)?;
             collect.push(entry_path);
         }
@@ -1558,8 +1615,11 @@ fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
                     .unwrap_or_else(|_| panic!("Cannot process {pathpos}!"))
             })
             .collect();
+    let (mut identities, identities_are_from_agent) = unlock_identity(identity_file, true)?;
     reencrypt_recursive(
-        &unlock_identity(identity_file)?,
+        &mut identities,
+        identity_file,
+        identities_are_from_agent,
         &recipient_list,
         identity_file.parent().unwrap(),
         &mut collect,
@@ -1964,10 +2024,7 @@ fn get_identity_file_from_name_path(
     }
 }
 
-fn get_identity_file_of_correct_store(
-    store_dir: &Path,
-    name: &str,
-) -> Result<PathBuf, Box<dyn Error>> {
+fn get_identity_file_from_name(store_dir: &Path, name: &str) -> Result<PathBuf, Box<dyn Error>> {
     let name_path = if name.starts_with("/") {
         // for absolute paths, use the identity of the store
         store_dir
@@ -1975,6 +2032,14 @@ fn get_identity_file_of_correct_store(
         &store_dir.join(name)
     };
     get_identity_file_from_name_path(store_dir, name_path)
+}
+
+fn is_hidden(entry: &walkdir::DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| s.starts_with("."))
+        .unwrap_or(false)
 }
 
 struct PasswordIter {
@@ -1987,24 +2052,17 @@ impl PasswordIter {
     fn new(store_dir: PathBuf, start_dir: PathBuf) -> Self {
         let identity_file = get_identity_file_from_name_path(&store_dir, &start_dir)
             .unwrap_or_else(|_| panic!("Cannot get identity file for {}!", store_dir.display()));
+        let (identities, _) = unlock_identity(&identity_file, true)
+            .unwrap_or_else(|_| panic!("Cannot unlock identity {}!", identity_file.display()));
         PasswordIter {
             walkdir: WalkDir::new(start_dir)
                 .follow_links(true)
                 .contents_first(false)
                 .into_iter(),
-            identities: unlock_identity(&identity_file)
-                .unwrap_or_else(|_| panic!("Cannot unlock identity {}!", identity_file.display())),
+            identities,
             store_dir,
         }
     }
-}
-
-fn is_hidden(entry: &walkdir::DirEntry) -> bool {
-    entry
-        .file_name()
-        .to_str()
-        .map(|s| s.starts_with("."))
-        .unwrap_or(false)
 }
 
 impl Iterator for PasswordIter {
@@ -2028,10 +2086,11 @@ impl Iterator for PasswordIter {
                                 e,
                             )
                         });
-                self.identities
-                    .extend(unlock_identity(&identity_file).unwrap_or_else(|_| {
+                let (mut new_identities, _) =
+                    unlock_identity(&identity_file, true).unwrap_or_else(|_| {
                         panic!("Cannot unlock identity file {}!", identity_file.display())
-                    }));
+                    });
+                self.identities.append(&mut new_identities);
                 continue;
             } else if path.is_dir() {
                 if is_hidden(&direntry) {
@@ -2045,8 +2104,15 @@ impl Iterator for PasswordIter {
         };
         Some((
             agefile.clone(),
-            decrypt_password(&self.identities, &agefile)
-                .unwrap_or_else(|_| panic!("Unable to decrypt {}!", agefile.display())),
+            decrypt_password(
+                &agefile,
+                &get_identity_file_from_name_path(&self.store_dir, &agefile)
+                    .unwrap_or_else(|e| panic!("Unable to decrypt {}! {}", agefile.display(), e)),
+                &mut self.identities,
+                true,
+                false,
+            )
+            .unwrap_or_else(|e| panic!("Unable to decrypt {}! {}", agefile.display(), e)),
         ))
     }
 }
@@ -2300,12 +2366,9 @@ fn menu_cmd(
 
     let agefile = store_dir.join(format!("{password_name}.age"));
     let mut content = String::new();
-    decrypt_password(
-        &unlock_identity(&get_identity_file_of_correct_store(
-            store_dir,
-            &password_name,
-        )?)?,
+    decrypt_password_simple(
         &agefile,
+        &get_identity_file_from_name(store_dir, &password_name)?,
     )?
     .read_to_string(&mut content)?;
 
@@ -2534,12 +2597,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let canonicalised_identity_file = match &cli.command {
             CliCommand::Show { name, .. }
             | CliCommand::Edit { name }
-            | CliCommand::Rm { name, .. } => get_identity_file_of_correct_store(store_dir, name)?,
+            | CliCommand::Rm { name, .. } => get_identity_file_from_name(store_dir, name)?,
             CliCommand::Mv { old_name, new_name } => {
                 let old_canonicalised_identity_file =
-                    get_identity_file_of_correct_store(store_dir, old_name)?;
+                    get_identity_file_from_name(store_dir, old_name)?;
                 let new_canonicalised_identity_file =
-                    get_identity_file_of_correct_store(store_dir, new_name)?;
+                    get_identity_file_from_name(store_dir, new_name)?;
                 if old_canonicalised_identity_file == new_canonicalised_identity_file {
                     old_canonicalised_identity_file
                 } else {
@@ -2552,7 +2615,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             CliCommand::AddRecipient { .. }
             | CliCommand::Reencrypt
             | CliCommand::ChangePassphrase
-            | CliCommand::Unlock { .. } => get_identity_file_of_correct_store(store_dir, "")?,
+            | CliCommand::Unlock { .. } => get_identity_file_from_name(store_dir, "")?,
             _ => PathBuf::new(),
         };
 
