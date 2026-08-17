@@ -473,15 +473,17 @@ fn setup_identity(store_dir: &Path, identity: Option<&String>) -> Result<String,
                         return Err("The supplied identity file should be encrypted with a passphrase, not with recipients/identities!".into());
                     }
                     let pass = rpassword::prompt_password("Unlock the supplied identity file: ")?;
-                    let mut reader =
-                        match decryptor.decrypt(iter::once(&new_passphrase_identity(&pass) as _)) {
-                            Ok(r) => r,
-                            Err(age::DecryptError::DecryptionFailed) => {
-                                eprintln!("Decryption failed! Wrong passphrase? Please try again.");
-                                continue;
-                            }
-                            Err(e) => return Err(Box::new(e)),
-                        };
+                    let mut reader = match decryptor
+                        .decrypt(iter::once(
+                            &new_passphrase_identity(&pass) as &dyn age::Identity
+                        )) {
+                        Ok(r) => r,
+                        Err(age::DecryptError::DecryptionFailed) => {
+                            eprintln!("Decryption failed! Wrong passphrase? Please try again.");
+                            continue;
+                        }
+                        Err(e) => return Err(Box::new(e)),
+                    };
                     let mut identity_string = String::new();
                     reader.read_to_string(&mut identity_string)?;
                     let pubkey = age_identity_from_keyfile_content(&identity_string)?
@@ -766,8 +768,9 @@ fn unlock_identity(identity_file: &Path) -> Result<Vec<Box<dyn age::Identity>>, 
             }
 
             let mut reader = match identity_decryptor
-                .decrypt(iter::once(&new_passphrase_identity(&pass) as _))
-            {
+                .decrypt(iter::once(
+                    &new_passphrase_identity(&pass) as &dyn age::Identity
+                )) {
                 Ok(r) => r,
                 Err(age::DecryptError::DecryptionFailed) => {
                     eprintln!("Decryption failed! Wrong passphrase? Please try again.");
@@ -913,50 +916,14 @@ fn edit_file_with_editor(path: &Path) -> Result<String, Box<dyn Error>> {
     Err(format!("Please set the EDITOR environment variable to an installed editor! Cannot start any of the following editors: {editors:?}").into())
 }
 
-// This is a helper trait to make the dynamic trait age::Recipient cloneable
-// By default Clone is not allowed for dynamic traits, because Clone is not object-safe. I have no
-// idea why and what exactly this means. I also have no idea why this workaround works. It is a bit
-// annoying to be honest, because here dyn age::Recipient can only mean age::x25519::Recipient or
-// ssh::Recipient and they both implement Clone!
-// Anyway, having recipients cloneable is nice to have, because age::Encryptor::with_recipients
-// **consumes** a vector of recipients. If we want to encrypt mulitple files in one go without
-// needing to reassemble the recipients from the .recipients directory then we need to be able to
-// clone them.
-trait RecipientClone: age::Recipient + Send {
-    fn clone_box(&self) -> Box<dyn RecipientClone>;
-    fn to_recipient(&self) -> Box<dyn age::Recipient + Send>;
-}
-impl RecipientClone for age::x25519::Recipient {
-    fn clone_box(&self) -> Box<dyn RecipientClone> {
-        Box::new(self.clone())
-    }
-    fn to_recipient(&self) -> Box<dyn age::Recipient + Send> {
-        Box::new(self.clone())
-    }
-}
-impl RecipientClone for ssh::Recipient {
-    fn clone_box(&self) -> Box<dyn RecipientClone> {
-        Box::new(self.clone())
-    }
-    fn to_recipient(&self) -> Box<dyn age::Recipient + Send> {
-        Box::new(self.clone())
-    }
-}
-// How is this allowed?
-impl Clone for Box<dyn RecipientClone> {
-    fn clone(&self) -> Box<dyn RecipientClone + 'static> {
-        self.clone_box()
-    }
-}
-
-fn recipient_from_str(line: &str) -> Result<Box<dyn RecipientClone>, Box<dyn Error>> {
+fn recipient_from_str(line: &str) -> Result<Box<dyn age::Recipient>, Box<dyn Error>> {
     if line.starts_with("ssh-") {
         ssh::Recipient::from_str(line)
-            .map(|r| Box::new(r) as Box<dyn RecipientClone>)
+            .map(|r| Box::new(r) as Box<dyn age::Recipient>)
             .map_err(|e| format!("{e:?}").into())
     } else {
         age::x25519::Recipient::from_str(line)
-            .map(|r| Box::new(r) as Box<dyn RecipientClone>)
+            .map(|r| Box::new(r) as Box<dyn age::Recipient>)
             .map_err(|e| e.into())
     }
 }
@@ -1025,13 +992,11 @@ impl Iterator for RecipientStrIter {
 
 // encrypts the contents of source into target_file
 fn encrypt_password(
-    recipients: Vec<Box<dyn age::Recipient + Send>>,
+    recipients: &[Box<dyn age::Recipient>],
     mut source: impl Read,
     target_file: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let encryptor = age::Encryptor::with_recipients(
-        recipients.iter().map(|i| i.as_ref() as &dyn age::Recipient),
-    )?;
+    let encryptor = age::Encryptor::with_recipients(recipients.iter().map(|i| i.as_ref()))?;
     let mut writer = encryptor.wrap_output(File::create(target_file)?)?;
     let mut content = vec![];
     source.read_to_end(&mut content)?;
@@ -1122,18 +1087,15 @@ fn edit(identity_file: &Path, store_dir: &Path, name: &str) -> Result<(), Box<dy
     // create parent directories
     fs::create_dir_all(agefile.parent().unwrap())?;
 
-    // encrypt
-    encrypt_password(
+    let recipients: Vec<Box<dyn age::Recipient>> =
         RecipientStrIter::new(&canon_store_dir.join(".recipients"))
             .map(|(pubkey_str, pathpos)| {
                 recipient_from_str(&pubkey_str)
                     .unwrap_or_else(|_| panic!("Cannot process {pathpos}!"))
-                    .to_recipient()
             })
-            .collect(),
-        &new_content[..],
-        &agefile,
-    )?;
+            .collect();
+    // encrypt
+    encrypt_password(&recipients, &new_content[..], &agefile)?;
 
     // git add/commit
     if check_for_git(canon_store_dir) {
@@ -1557,7 +1519,7 @@ fn remove(
 fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
     fn reencrypt_recursive(
         identities: &[Box<dyn age::Identity>],
-        recipients: &[Box<dyn RecipientClone>],
+        recipients: &[Box<dyn age::Recipient>],
         cur_dir: &Path,
         collect: &mut Vec<PathBuf>,
     ) -> Result<(), Box<dyn Error>> {
@@ -1582,18 +1544,14 @@ fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
 
             let mut content = vec![];
             decrypt_password(identities, &entry_path)?.read_to_end(&mut content)?;
-            encrypt_password(
-                recipients.iter().map(|r| r.to_recipient()).collect(),
-                &content[..],
-                &entry_path,
-            )?;
+            encrypt_password(recipients, &content[..], &entry_path)?;
             collect.push(entry_path);
         }
         Ok(())
     }
 
     let mut collect = vec![];
-    let recipient_clone_list: Vec<Box<dyn RecipientClone>> =
+    let recipient_list: Vec<Box<dyn age::Recipient>> =
         RecipientStrIter::new(&identity_file.parent().unwrap().join(".recipients"))
             .map(|(pubkey_str, pathpos)| {
                 recipient_from_str(&pubkey_str)
@@ -1602,7 +1560,7 @@ fn reencrypt(identity_file: &Path) -> Result<bool, Box<dyn Error>> {
             .collect();
     reencrypt_recursive(
         &unlock_identity(identity_file)?,
-        &recipient_clone_list,
+        &recipient_list,
         identity_file.parent().unwrap(),
         &mut collect,
     )?;
@@ -1724,8 +1682,9 @@ fn change_passphrase(identity_file: &Path) -> Result<(), Box<dyn Error>> {
 
             let passphrase = rpassword::prompt_password("Enter the current passphrase: ")?;
             let mut reader = match identity_decryptor
-                .decrypt(iter::once(&new_passphrase_identity(&passphrase) as _))
-            {
+                .decrypt(iter::once(
+                    &new_passphrase_identity(&passphrase) as &dyn age::Identity
+                )) {
                 Ok(r) => r,
                 Err(age::DecryptError::DecryptionFailed) => {
                     eprintln!("Decryption failed! Wrong passphrase? Please try again.");
