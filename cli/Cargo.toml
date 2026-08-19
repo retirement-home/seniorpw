@@ -2,12 +2,6 @@
 name = "senior"
 version = "0.8.5"
 edition = "2024"
-default-run = "senior"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[[bin]]
-name = "senior"
-path = "src/main.rs"
 
 [dependencies]
 age = { version = "0.12", features = ["ssh"] }
