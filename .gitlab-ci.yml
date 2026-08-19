@@ -4,9 +4,9 @@
 
 .rust_code_rules: &rust_code_rules
   changes:
-    - src/seniorpw/**/*.rs
-    - src/seniorpw/Cargo.toml
-    - src/seniorpw/Cargo.lock
+    - cli/**/*.rs
+    - cli/Cargo.toml
+    - cli/Cargo.lock
 
 variables:
   # move cargo data into the project directory so it can be cached
@@ -26,7 +26,7 @@ default:
     # for the same branch or the same merge request
     paths:
       - .cargo
-      - src/seniorpw/target
+      - cli/target
 
 stages:
   - test
@@ -43,7 +43,7 @@ tests:
     - *rust_code_rules
   script:
     - rustup component add rustfmt clippy
-    - cd src/seniorpw
+    - cd cli
     - cargo fmt --check
     - cargo clippy --all-targets
 
@@ -55,7 +55,7 @@ prepare_release:
     - *rust_code_rules
   script:
     - echo "Getting version string from Cargo.toml"
-    - PKG_VERSION="$(grep '^version = "' src/seniorpw/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"$/\1/')"
+    - PKG_VERSION="$(grep '^version = "' cli/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"$/\1/')"
     - echo "$PKG_VERSION"
     - echo "PKG_VERSION=$PKG_VERSION" >> variables.env
     - echo "$CI_PROJECT_URL"
@@ -88,7 +88,7 @@ build:
       fi
     - export PATH="$PWD/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
     - mkdir bin
-    - cd src/seniorpw/
+    - cd cli/
     - rustup target add $TARGETTRIPLES
     - |
       for TARGETTRIPLE in $TARGETTRIPLES; do
@@ -139,5 +139,5 @@ release:
       --name "$PKG_VERSION" \
       --tag-name "$PKG_VERSION" \
       $(printf "%s" "$ASSETSLINKS") \
-      --assets-link "{\"name\":\"senior-zsh-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.zsh?inline=false\"}" \
-      --assets-link "{\"name\":\"senior-bash-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/src/completions/senior.bash?inline=false\"}"
+      --assets-link "{\"name\":\"senior-zsh-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/completions/senior.zsh?inline=false\"}" \
+      --assets-link "{\"name\":\"senior-bash-completion-$PKG_VERSION\",\"url\":\"https://gitlab.com/$CI_PROJECT_PATH/-/raw/$CI_COMMIT_SHA/completions/senior.bash?inline=false\"}"
