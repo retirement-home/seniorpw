@@ -28,9 +28,9 @@
             name = "source";
           };
 
-          sourceRoot = "source/src/seniorpw";
+          sourceRoot = "source/cli";
           cargoLock = {
-            lockFile = ./src/seniorpw/Cargo.lock;
+            lockFile = ./cli/Cargo.lock;
           };
 
           nativeBuildInputs = [ pkgs.installShellFiles ];

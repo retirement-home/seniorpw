@@ -6,11 +6,11 @@ ZSHCOMPLETION := $(PREFIX)/local/share/zsh/site-functions/_senior
 BASHCOMPLETION := $(PREFIX)/local/share/bash-completion/completions/senior
 MANDIR := $(PREFIX)/local/share/man/man1
 
-RUSTDIR := src/seniorpw
+RUSTDIR := cli
 
-build: $(RUSTDIR)/target/release/senior src/man/senior.1
+build: $(RUSTDIR)/target/release/senior man/senior.1
 
-$(RUSTDIR)/target/release/senior src/man/senior.1: $(RUSTDIR)/src/*
+$(RUSTDIR)/target/release/senior man/senior.1: $(RUSTDIR)/src/*
 	cargo build --manifest-path $(RUSTDIR)/Cargo.toml --bins --locked --release --target-dir $(RUSTDIR)/target
 
 help:
@@ -23,9 +23,9 @@ install: build
 	mkdir -p $(MANDIR)
 	killall senior || true # Ignore error
 	cp $(RUSTDIR)/target/release/senior $(BINARY)
-	cp src/completions/senior.zsh $(ZSHCOMPLETION)
-	cp src/completions/senior.bash $(BASHCOMPLETION)
-	cp src/man/* $(MANDIR)
+	cp completions/senior.zsh $(ZSHCOMPLETION)
+	cp completions/senior.bash $(BASHCOMPLETION)
+	cp man/* $(MANDIR)
 
 uninstall:
 	rm -f $(BINARY)
