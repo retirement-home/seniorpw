@@ -15,12 +15,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{env, str::FromStr};
 use std::{thread, time};
 
-use senior::{get_socket_name, geteuid};
-
 use age::secrecy::{ExposeSecret, SecretString};
 use age::{self, ssh};
 use clap::Parser;
-use interprocess::local_socket::{self, ListenerOptions, prelude::*};
+use interprocess::local_socket::{self, ListenerOptions, GenericFilePath, GenericNamespaced, prelude::*};
 use sysinfo::System;
 use tempfile::TempDir;
 use walkdir::WalkDir;
@@ -85,6 +83,36 @@ fn get_display_server() -> DisplayServer {
     }
     // Default: Windows
     DisplayServer::Windows
+}
+
+#[link(name = "c")]
+unsafe extern "C" {
+    pub fn geteuid() -> u32;
+}
+
+pub fn get_socket_name() -> (String, local_socket::Name<'static>) {
+    if let Some(runtime_dir) = env::var_os("XDG_RUNTIME_DIR")
+        && GenericFilePath::is_supported()
+    {
+        let mut path = PathBuf::from(runtime_dir);
+        if path.is_dir() {
+            path.push("senior-agent.sock");
+            let path = path.to_str().unwrap().to_string();
+            return (path.clone(), path.to_fs_name::<GenericFilePath>().unwrap());
+        }
+    }
+
+    let uid = unsafe { geteuid() };
+    let name = format!("senior-agent-{uid}.sock");
+    if GenericNamespaced::is_supported() {
+        (
+            format!("{}{}", "@", name),
+            name.to_ns_name::<GenericNamespaced>().unwrap(),
+        )
+    } else {
+        let name = format!("{}{}", "/tmp/", name);
+        (name.clone(), name.to_fs_name::<GenericFilePath>().unwrap())
+    }
 }
 
 // Converts the path of an identity file to the key used for `senior agent`. Most importantly this
