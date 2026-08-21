@@ -4,12 +4,12 @@
 
 .rust_code_rules: &rust_code_rules
   changes:
-    - cli/**/*.rs
-    - core/**/*.rs
     - Cargo.toml
-    - cli/Cargo.toml
-    - core/Cargo.toml
     - Cargo.lock
+    - cli/Cargo.toml
+    - cli/**/*.rs
+    - core/Cargo.toml
+    - core/**/*.rs
 
 variables:
   # move cargo data into the project directory so it can be cached
@@ -29,7 +29,7 @@ default:
     # for the same branch or the same merge request
     paths:
       - .cargo
-      - cli/target
+      - target
 
 stages:
   - test
@@ -57,7 +57,7 @@ prepare_release:
     - *rust_code_rules
   script:
     - echo "Getting version string from Cargo.toml"
-    - PKG_VERSION="$(grep '^version = "' cli/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"$/\1/')"
+    - PKG_VERSION="$(grep '^version = "' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"$/\1/')"
     - echo "$PKG_VERSION"
     - echo "PKG_VERSION=$PKG_VERSION" >> variables.env
     - echo "$CI_PROJECT_URL"
