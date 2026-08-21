@@ -1,0 +1,8 @@
+[package]
+name = "seniorpw-core"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+age = { workspace = true }
+walkdir = { workspace = true }

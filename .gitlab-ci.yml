@@ -5,8 +5,11 @@
 .rust_code_rules: &rust_code_rules
   changes:
     - cli/**/*.rs
+    - core/**/*.rs
+    - Cargo.toml
     - cli/Cargo.toml
-    - cli/Cargo.lock
+    - core/Cargo.toml
+    - Cargo.lock
 
 variables:
   # move cargo data into the project directory so it can be cached
@@ -43,7 +46,6 @@ tests:
     - *rust_code_rules
   script:
     - rustup component add rustfmt clippy
-    - cd cli
     - cargo fmt --check
     - cargo clippy --all-targets
 
@@ -88,14 +90,13 @@ build:
       fi
     - export PATH="$PWD/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
     - mkdir bin
-    - cd cli/
     - rustup target add $TARGETTRIPLES
     - |
       for TARGETTRIPLE in $TARGETTRIPLES; do
         cargo build --release --target="$TARGETTRIPLE"
-        mv target/$TARGETTRIPLE/release/senior ../../bin/senior-$PKG_VERSION-$TARGETTRIPLE
+        mv target/$TARGETTRIPLE/release/senior bin/senior-$PKG_VERSION-$TARGETTRIPLE
       done
-    - ls -la ../../bin/
+    - ls -la bin/
   artifacts:
     paths:
       - bin/

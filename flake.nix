@@ -28,9 +28,9 @@
             name = "source";
           };
 
-          sourceRoot = "source/cli";
+          sourceRoot = "source";
           cargoLock = {
-            lockFile = ./cli/Cargo.lock;
+            lockFile = ./Cargo.lock;
           };
 
           nativeBuildInputs = [ pkgs.installShellFiles ];
@@ -40,8 +40,8 @@
               installManPage "$manfile"
             done
 
-            installShellCompletion --bash ../completions/senior.bash
-            installShellCompletion --zsh ../completions/senior.zsh
+            installShellCompletion --bash completions/senior.bash
+            installShellCompletion --zsh completions/senior.zsh
           '';
 
           meta = {

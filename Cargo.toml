@@ -1,0 +1,14 @@
+# /Cargo.toml (workspace root — no [package] section)
+[workspace]
+resolver = "3"
+members = ["cli", "core"]
+
+[workspace.package]
+version = "0.8.5"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+repository = "https://gitlab.com/retirement-home/seniorpw"
+
+[workspace.dependencies]
+age = { version = "0.12", features = ["ssh"] }
+walkdir = "2.5"

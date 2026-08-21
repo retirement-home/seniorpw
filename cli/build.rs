@@ -8,7 +8,7 @@ use std::io::Result;
 use std::io::Write;
 use std::path::Path;
 
-include!("src/cli.rs");
+include!("src/args.rs");
 
 fn generate_manpages(dir: &Path) -> Result<()> {
     fn generate(dir: &Path, app: &Command) -> Result<()> {

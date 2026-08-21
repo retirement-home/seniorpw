@@ -1,10 +1,11 @@
 [package]
 name = "senior"
-version = "0.8.5"
-edition = "2024"
+edition.workspace = true
+version.workspace = true
 
 [dependencies]
-age = { version = "0.12", features = ["ssh"] }
+seniorpw-core = { path = "../core" }
+age = { workspace = true }
 atty = "0.2"
 base32 = "0.5"
 chrono = "0.4"
@@ -17,7 +18,7 @@ sysinfo = "0.39"
 tempfile = "3.23"
 termcolor = "1.4"
 thotp = "0.1"
-walkdir = "2.5"
+walkdir = { workspace = true }
 whoami = "2.0"
 
 [build-dependencies]
